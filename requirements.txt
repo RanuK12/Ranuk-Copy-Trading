@@ -1,0 +1,23 @@
+# Core dependencies for the Polymarket Copy-Trading Bot
+# Tested with Python 3.10+ (3.11/3.12 recommended)
+
+# Polymarket CLOB client (order signing + submission)
+py-clob-client==0.22.0
+
+# Polygon / on-chain interaction
+web3==6.20.3
+
+# REST calls to Polymarket Gamma / Data / CLOB HTTP APIs
+requests==2.32.3
+
+# Real-time WSS subscriptions (optional low-latency mode)
+websockets==12.0
+
+# Async helpers
+aiohttp==3.10.10
+
+# Config
+python-dotenv==1.0.1
+
+# Nice structured logging in the terminal
+rich==13.9.4
