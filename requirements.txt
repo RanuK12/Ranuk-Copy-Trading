@@ -5,8 +5,8 @@
 
 # --- Polymarket / EVM ---
 py-clob-client==0.22.0
-web3==6.20.3
-eth-account==0.11.2
+web3
+eth-account>=0.13.0
 
 # --- HTTP / async ---
 requests==2.32.3
@@ -20,7 +20,7 @@ supabase==2.9.1
 # --- Config / CLI / UX ---
 python-dotenv==1.0.1
 rich==13.9.4
-pydantic==2.9.2
+pydantic
 pyyaml==6.0.2
 watchdog==5.0.3
 
@@ -29,7 +29,7 @@ textual==0.83.0
 
 # --- Notifications (v3, all optional) ---
 plyer==2.1.0                    # cross-platform desktop notifications
-beepy==1.0.7                    # cross-platform sound beeps
+beepy==1.0.9                    # cross-platform sound beeps
 python-telegram-bot==21.6       # optional
 
 # --- Wallet security (v3) ---
