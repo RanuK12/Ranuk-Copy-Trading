@@ -30,6 +30,10 @@ Arbitrage  Tail-End    Micro-Spread   DipArb        Smart-Copy ...
                  state.json / Supabase / Telegram
 ```
 
+### Live Dashboard
+
+![Bot running live with web dashboard](docs/images/dashboard_live.png)
+
 ---
 
 ## Highlights
