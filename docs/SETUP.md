@@ -79,6 +79,11 @@ HTTP polling.
 
 ---
 
+> 🇪🇸 **Si hablás español y es tu primera vez conectando una cuenta de
+> Polymarket**, mirá [CONECTAR_WALLET.md](CONECTAR_WALLET.md) antes de
+> seguir — cubre paso a paso cómo obtener tu Funder, tu private key,
+> depositar USDC por la red correcta y validar el vínculo en paper mode.
+
 ## 4. Polymarket API keys
 
 The bot authenticates to the CLOB with your EOA private key and Polymarket
