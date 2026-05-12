@@ -1,5 +1,5 @@
 # ============================================================================
-# Polymarket Multi-Strategy Trading Bot — dependencies
+# Polymarket Multi-Strategy Trading Bot — dependencies (v3)
 # Python 3.11+ recommended
 # ============================================================================
 
@@ -21,10 +21,30 @@ supabase==2.9.1
 python-dotenv==1.0.1
 rich==13.9.4
 pydantic==2.9.2
+pyyaml==6.0.2
+watchdog==5.0.3
 
-# --- Alerts ---
-python-telegram-bot==21.6
+# --- Terminal UI (v3) ---
+textual==0.83.0
+
+# --- Notifications (v3, all optional) ---
+plyer==2.1.0                    # cross-platform desktop notifications
+beepy==1.0.7                    # cross-platform sound beeps
+python-telegram-bot==21.6       # optional
+
+# --- Wallet security (v3) ---
+keyring==25.4.1                 # OS keychain integration
+cryptography==43.0.1            # Fernet encryption
+
+# --- Web dashboard (v3, optional) ---
+fastapi==0.115.0
+uvicorn[standard]==0.31.0
+jinja2==3.1.4
+
+# --- Observability (v3, optional) ---
+prometheus-client==0.21.0
 
 # --- Testing ---
 pytest==8.3.3
 pytest-asyncio==0.24.0
+pytest-mock==3.14.0
