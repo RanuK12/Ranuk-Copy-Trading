@@ -78,6 +78,8 @@ with `Ctrl-C`; state is persisted to `bot_state.json`.
 
 Full installation and configuration walkthrough: **[docs/SETUP.md](docs/SETUP.md)**.
 Per-strategy explanations and tuning guidance: **[docs/STRATEGIES.md](docs/STRATEGIES.md)**.
+Wiring the bot to your Polymarket account and depositing USDC (**Spanish**):
+**[docs/CONECTAR_WALLET.md](docs/CONECTAR_WALLET.md)**.
 
 ---
 
