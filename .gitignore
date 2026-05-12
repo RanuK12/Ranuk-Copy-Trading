@@ -1,0 +1,31 @@
+# --- Secrets / config ---
+.env
+.env.*
+!.env.example
+
+# --- Bot runtime state ---
+bot_state.json
+*.log
+logs/
+
+# --- Python ---
+__pycache__/
+*.py[cod]
+*$py.class
+*.egg-info/
+.eggs/
+build/
+dist/
+.venv/
+venv/
+env/
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+
+# --- OS / editors ---
+.DS_Store
+Thumbs.db
+.idea/
+.vscode/
+*.swp
