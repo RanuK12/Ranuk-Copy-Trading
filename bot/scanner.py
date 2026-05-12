@@ -142,14 +142,19 @@ class MarketScanner:
 
         # Pick the most promising candidates for orderbook enrichment.
         # Heuristics (cheap, pre-orderbook):
-        #   * highest volume first  -> better liquidity
-        #   * prefer crypto 15m     -> DipArb / MM / Micro-Spread
+        #   * markets resolving soon (<=7 days) get highest priority
+        #   * then crypto 15m       -> DipArb / MM / Micro-Spread
+        #   * then highest volume   -> better liquidity
+        def _enrich_priority(e: EnrichedMarket) -> tuple:
+            days = e.days_to_resolution()
+            # Resolves within 7 days → priority 0 (highest)
+            resolves_soon = 0 if (days is not None and 0 < days <= 7) else 2
+            is_crypto = 0 if e.is_crypto_15m() else 1
+            return (resolves_soon, is_crypto, -e.market.volume_usdc)
+
         candidates = sorted(
             enriched.values(),
-            key=lambda e: (
-                0 if e.is_crypto_15m() else 1,
-                -e.market.volume_usdc,
-            ),
+            key=_enrich_priority,
         )[: self._max_enrich]
 
         await asyncio.gather(
