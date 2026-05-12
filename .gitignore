@@ -3,7 +3,7 @@
 .env.*
 !.env.example
 
-# --- Bot runtime state ---
+# --- Runtime state ---
 bot_state.json
 *.log
 logs/
@@ -22,6 +22,8 @@ env/
 .pytest_cache/
 .mypy_cache/
 .ruff_cache/
+.coverage
+htmlcov/
 
 # --- OS / editors ---
 .DS_Store
@@ -29,3 +31,6 @@ Thumbs.db
 .idea/
 .vscode/
 *.swp
+
+# --- PM2 ---
+.pm2/
