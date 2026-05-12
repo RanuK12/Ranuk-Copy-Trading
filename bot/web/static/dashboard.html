@@ -1,0 +1,201 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Polymarket Bot — Dashboard</title>
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
+<style>
+  :root { color-scheme: dark; }
+  body {
+    font-family: ui-monospace, Menlo, Consolas, monospace;
+    background: #0d1117; color: #e6edf3; margin: 0; padding: 1rem;
+  }
+  header {
+    display: flex; align-items: center; justify-content: space-between;
+    padding-bottom: 0.8rem; border-bottom: 1px solid #30363d; margin-bottom: 1rem;
+  }
+  h1 { margin: 0; font-size: 1.3rem; color: #58a6ff; }
+  .kpis { display: flex; gap: 2rem; }
+  .kpi .v { font-size: 1.5rem; font-weight: bold; }
+  .kpi .l { color: #8b949e; font-size: 0.8rem; }
+  .pos { color: #3ddc84 } .neg { color: #e74c3c }
+  .row { display: grid; grid-template-columns: 2fr 1fr; gap: 1rem; margin-bottom: 1rem; }
+  .card {
+    background: #161b22; border: 1px solid #30363d; border-radius: 8px;
+    padding: 1rem; overflow: auto;
+  }
+  h2 { margin: 0 0 0.6rem 0; font-size: 1rem; color: #58a6ff; }
+  table { width: 100%; border-collapse: collapse; font-size: 0.9rem; }
+  th, td { padding: 0.3rem 0.5rem; border-bottom: 1px solid #30363d; text-align: left; }
+  th { color: #8b949e; font-weight: normal; }
+  td.r, th.r { text-align: right; font-variant-numeric: tabular-nums; }
+  .dot { display: inline-block; width: 8px; height: 8px; border-radius: 50%;
+         background: #3ddc84; margin-right: 0.4rem; vertical-align: middle; }
+  .dot.off { background: #e74c3c; }
+  canvas { max-height: 280px; }
+  .pill {
+    display: inline-block; padding: 0.15rem 0.6rem; border-radius: 999px;
+    font-size: 0.75rem; background: #30363d;
+  }
+  .pill.mode-live { background: #7a2020; color: #ffb0b0; }
+  .pill.mode-paper { background: #30363d; color: #8b949e; }
+  footer { color: #6b7280; font-size: 0.75rem; margin-top: 1rem; }
+</style>
+</head>
+<body>
+
+<header>
+  <h1>🤖 Polymarket Bot <span id="mode-pill" class="pill mode-paper">PAPER</span></h1>
+  <div class="kpis">
+    <div class="kpi"><div id="equity" class="v">$0.00</div><div class="l">equity</div></div>
+    <div class="kpi"><div id="pnl-day" class="v">+0.00</div><div class="l">PnL day</div></div>
+    <div class="kpi"><div id="pnl-month" class="v">+0.00</div><div class="l">PnL month</div></div>
+    <div class="kpi"><div id="queue" class="v">0</div><div class="l">queue</div></div>
+    <div class="kpi"><div id="kill" class="v">off</div><div class="l">kill switch</div></div>
+  </div>
+</header>
+
+<div class="row">
+  <div class="card">
+    <h2>📈 Equity curve</h2>
+    <canvas id="equity-chart"></canvas>
+  </div>
+  <div class="card">
+    <h2>🔍 Scanner</h2>
+    <table>
+      <tbody>
+        <tr><td>Markets tracked</td><td id="sc-markets" class="r">0</td></tr>
+        <tr><td>Arb candidates</td><td id="sc-arb" class="r">0</td></tr>
+        <tr><td>Tail-end candidates</td><td id="sc-tail" class="r">0</td></tr>
+        <tr><td>Micro-spread</td><td id="sc-micro" class="r">0</td></tr>
+        <tr><td>Crypto 15m</td><td id="sc-crypto" class="r">0</td></tr>
+        <tr><td>Last scan</td><td id="sc-age" class="r">-</td></tr>
+      </tbody>
+    </table>
+  </div>
+</div>
+
+<div class="row">
+  <div class="card">
+    <h2>📊 Strategies</h2>
+    <table>
+      <thead><tr>
+        <th>Strategy</th><th class="r">Trades</th><th class="r">Win %</th>
+        <th class="r">PnL</th><th class="r">PF</th>
+      </tr></thead>
+      <tbody id="strategies-body"></tbody>
+    </table>
+  </div>
+  <div class="card">
+    <h2>📝 Recent fills</h2>
+    <table>
+      <thead><tr>
+        <th>When</th><th>Strategy</th><th>Status</th><th class="r">PnL</th>
+      </tr></thead>
+      <tbody id="fills-body"></tbody>
+    </table>
+  </div>
+</div>
+
+<footer>
+  Live via WebSocket at <code>/ws/dashboard</code>. Snapshot REST at
+  <code>/api/snapshot</code>. Polls every second.
+</footer>
+
+<script>
+const ctx = document.getElementById('equity-chart').getContext('2d');
+const chart = new Chart(ctx, {
+  type: 'line',
+  data: { labels: [], datasets: [{
+    label: 'Equity',
+    data: [],
+    fill: true,
+    borderColor: '#3ddc84',
+    backgroundColor: 'rgba(61,220,132,0.1)',
+    tension: 0.25,
+    pointRadius: 0,
+  }] },
+  options: {
+    animation: false,
+    responsive: true,
+    plugins: { legend: { display: false } },
+    scales: {
+      x: { ticks: { color: '#8b949e' }, grid: { color: '#30363d' } },
+      y: { ticks: { color: '#8b949e' }, grid: { color: '#30363d' } },
+    },
+  },
+});
+
+function fmt(n, signed=false) {
+  const v = Number(n) || 0;
+  const s = v.toFixed(2);
+  return signed && v >= 0 ? '+' + s : s;
+}
+
+function applySnapshot(s) {
+  document.getElementById('mode-pill').textContent = (s.mode || 'paper').toUpperCase();
+  document.getElementById('mode-pill').className = 'pill mode-' + (s.mode || 'paper');
+  document.getElementById('equity').textContent = '$' + fmt(s.equity);
+  const pnlDay = document.getElementById('pnl-day');
+  pnlDay.textContent = fmt(s.pnl_day, true);
+  pnlDay.className = 'v ' + (s.pnl_day >= 0 ? 'pos' : 'neg');
+  const pnlMonth = document.getElementById('pnl-month');
+  pnlMonth.textContent = fmt(s.pnl_month, true);
+  pnlMonth.className = 'v ' + (s.pnl_month >= 0 ? 'pos' : 'neg');
+  document.getElementById('queue').textContent = s.queue_depth;
+  document.getElementById('kill').textContent = s.kill_switch ? 'ON' : 'off';
+
+  const sc = s.scanner || {};
+  document.getElementById('sc-markets').textContent = sc.markets_tracked ?? 0;
+  document.getElementById('sc-arb').textContent = sc.arb_candidates ?? 0;
+  document.getElementById('sc-tail').textContent = sc.tail_end_candidates ?? 0;
+  document.getElementById('sc-micro').textContent = sc.micro_spread_candidates ?? 0;
+  document.getElementById('sc-crypto').textContent = sc.crypto_15m ?? 0;
+  document.getElementById('sc-age').textContent =
+    sc.last_scan_age_s == null ? '-' : sc.last_scan_age_s + 's';
+
+  chart.data.labels = (s.equity_curve || []).map((_, i) => i + 1);
+  chart.data.datasets[0].data = (s.equity_curve || []).map(p => p.equity);
+  chart.update('none');
+
+  const tb = document.getElementById('strategies-body');
+  tb.innerHTML = '';
+  (s.strategies || []).forEach(r => {
+    const tr = document.createElement('tr');
+    tr.innerHTML = `
+      <td>${r.name}</td>
+      <td class="r">${r.trades}</td>
+      <td class="r">${(r.win_rate * 100).toFixed(1)}%</td>
+      <td class="r ${r.pnl >= 0 ? 'pos' : 'neg'}">${fmt(r.pnl, true)}</td>
+      <td class="r">${r.profit_factor.toFixed(2)}</td>`;
+    tb.appendChild(tr);
+  });
+
+  const fb = document.getElementById('fills-body');
+  fb.innerHTML = '';
+  (s.recent_fills || []).slice(0, 12).forEach(f => {
+    const tr = document.createElement('tr');
+    const ts = new Date((f.executed_at || 0) * 1000).toLocaleTimeString();
+    const pnl = Number(f.pnl_usdc) || 0;
+    tr.innerHTML = `
+      <td>${ts}</td>
+      <td>${f.strategy || ''}</td>
+      <td>${f.status || ''}</td>
+      <td class="r ${pnl >= 0 ? 'pos' : 'neg'}">${fmt(pnl, true)}</td>`;
+    fb.appendChild(tr);
+  });
+}
+
+function connect() {
+  const proto = location.protocol === 'https:' ? 'wss' : 'ws';
+  const ws = new WebSocket(`${proto}://${location.host}/ws/dashboard`);
+  ws.onmessage = (ev) => applySnapshot(JSON.parse(ev.data));
+  ws.onclose = () => setTimeout(connect, 2000);
+}
+connect();
+
+// Prime once via REST so the page has data before the first WS tick.
+fetch('/api/snapshot').then(r => r.json()).then(applySnapshot).catch(() => {});
+</script>
+</body>
+</html>

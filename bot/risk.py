@@ -163,15 +163,33 @@ class RiskManager:
     # Sizing
     # ------------------------------------------------------------------
     def adjusted_size(self, strategy: str, base_size: float) -> float:
-        """Apply drawdown + high-risk strategy sizing cuts."""
+        """Apply budget profile, hot-reload multiplier, high-risk cut and drawdown."""
+        # 1. Budget profile owns the base trade size for micro / small tiers.
+        try:
+            from bot.core.budget import current_profile
+            profile = current_profile()
+            base_size = min(base_size, profile.trade_size_usdc)
+        except Exception:  # noqa: BLE001 — budget module optional
+            pass
+
         size = base_size
-        # High-risk strategies get 25% of base by default (micro_spread, dip_arb)
+
+        # 2. Command bar / TUI multiplier (e.g. `/size arb 50`).
+        try:
+            from bot.monitoring.commands import get_controller
+            size *= get_controller().sizing_multiplier(strategy)
+        except Exception:  # noqa: BLE001
+            pass
+
+        # 3. High-risk strategies get 25% of base (micro_spread, dip_arb)
         if strategy in {"micro_spread", "dip_arb"}:
             size *= 0.25
-        # Drawdown >= MAX_DRAWDOWN -> 50% sizing
+
+        # 4. Drawdown >= MAX_DRAWDOWN -> 50% sizing
         if self._in_drawdown():
             size *= 0.50
-        return round(size, 4)
+
+        return round(max(0.0, size), 4)
 
     def _in_drawdown(self) -> bool:
         if self.state.peak_equity <= 0:
@@ -194,22 +212,43 @@ class RiskManager:
         if now < paused_until:
             return False, f"strategy_paused:{opp.strategy}"
 
-        # Daily / monthly loss caps
-        if -self.state.realized_pnl_day >= CFG.daily_loss_usdc:
+        # Budget-profile-aware caps (fall back to CFG for standard/large).
+        try:
+            from bot.core.budget import current_profile
+            profile = current_profile()
+            daily_cap = profile.daily_loss_cap_usdc
+            max_market = profile.max_per_market_usdc
+            max_strategy = profile.max_per_strategy_usdc
+            monthly_cap = CFG.monthly_loss_usdc
+        except Exception:  # noqa: BLE001
+            daily_cap = CFG.daily_loss_usdc
+            max_market = CFG.max_market_usdc
+            max_strategy = CFG.max_strategy_usdc
+            monthly_cap = CFG.monthly_loss_usdc
+
+        if -self.state.realized_pnl_day >= daily_cap:
             self.trigger_kill_switch("daily_loss_cap_reached")
             return False, "daily_loss_cap"
-        if -self.state.realized_pnl_month >= CFG.monthly_loss_usdc:
+        if -self.state.realized_pnl_month >= monthly_cap:
             self.trigger_kill_switch("monthly_loss_cap_reached")
             return False, "monthly_loss_cap"
+
+        # Strategy on/off from the StrategyController (TUI/Telegram hot toggle)
+        try:
+            from bot.monitoring.commands import get_controller
+            if not get_controller().is_enabled(opp.strategy):
+                return False, f"strategy_disabled:{opp.strategy}"
+        except Exception:  # noqa: BLE001
+            pass
 
         # Exposure caps
         order_size = sum(leg.size_usdc for leg in opp.legs)
         mkt_exp = self.state.exposure_per_market.get(opp.market_id, 0.0)
-        if mkt_exp + order_size > CFG.max_market_usdc + 1e-6:
+        if mkt_exp + order_size > max_market + 1e-6:
             return False, "market_exposure_cap"
 
         strat_exp = self.state.exposure_per_strategy.get(opp.strategy, 0.0)
-        if strat_exp + order_size > CFG.max_strategy_usdc + 1e-6:
+        if strat_exp + order_size > max_strategy + 1e-6:
             return False, "strategy_exposure_cap"
 
         return True, "ok"

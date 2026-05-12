@@ -100,18 +100,20 @@ def test_win_clears_consecutive_losses():
 
 def test_adjusted_size_cuts_micro_spread_to_25pct():
     rm = RiskManager()
+    # At $1000 capital the standard profile caps per-trade at $20, so feeding
+    # $40 in still clamps at 20 before the 25% high-risk cut (-> 5.0).
     base = 40.0
-    assert rm.adjusted_size("arbitrage", base) == 40.0
-    assert rm.adjusted_size("micro_spread", base) == 10.0  # 25%
-    assert rm.adjusted_size("dip_arb", base) == 10.0  # 25%
+    assert rm.adjusted_size("arbitrage", base) == 20.0
+    assert rm.adjusted_size("micro_spread", base) == 5.0  # 20 * 0.25
+    assert rm.adjusted_size("dip_arb", base) == 5.0
 
 
 def test_drawdown_halves_size():
     rm = RiskManager()
-    # Simulate hitting 11% drawdown from the $1000 peak
-    rm.state.current_equity = 890.0
+    rm.state.current_equity = 890.0  # 11% below the $1000 peak
     assert rm._in_drawdown() is True
-    assert rm.adjusted_size("arbitrage", 100.0) == 50.0
+    # Base input $100 is clamped to the profile's $20, then halved -> $10.
+    assert rm.adjusted_size("arbitrage", 100.0) == 10.0
 
 
 def test_api_error_streak_global_pauses():
