@@ -136,6 +136,8 @@ class Executor:
             px = leg.limit_price or opp.reference_price
             if px is None:
                 px = await self._poly.get_price_async(leg.token_id, leg.side.value) or 0.0
+            # Fetch current live price for more realistic PnL estimate
+            live_px = await self._poly.get_price_async(leg.token_id, leg.side.value)
             fills_detail.append(
                 {
                     "token_id": leg.token_id,
@@ -143,13 +145,21 @@ class Executor:
                     "size_usdc": leg.size_usdc,
                     "kind": leg.kind.value,
                     "price": px,
+                    "live_price": live_px,
                 }
             )
             if leg.side is Side.BUY:
-                # Theoretical P&L = edge * shares, where expected_profit_pct
-                # captures the strategy's own estimate.
                 shares = leg.size_usdc / px if px > 0 else 0
-                theoretical_pnl += shares * px * opp.expected_profit_pct
+                if live_px is not None and live_px > 0:
+                    # Use actual market price difference for more realistic P&L
+                    theoretical_pnl += shares * (live_px - px)
+                    # If live price equals entry (common for immediate fill),
+                    # fall back to expected edge estimate
+                    if abs(live_px - px) < 1e-6:
+                        theoretical_pnl += shares * px * opp.expected_profit_pct
+                else:
+                    # Fallback to theoretical estimate
+                    theoretical_pnl += shares * px * opp.expected_profit_pct
 
         log.info(
             f"[cyan][SIMULADO][/] Estrategia: {opp.strategy} | "
@@ -265,7 +275,7 @@ class Executor:
                     side=side_const,
                 )
                 signed = await asyncio.to_thread(client.create_order, args)
-                order_type = OrderType.GTC if leg.kind is OrderKind.GTC else OrderType.GTC
+                order_type = OrderType.GTC if leg.kind is OrderKind.GTC else OrderType.FOK
                 resp = await asyncio.to_thread(client.post_order, signed, order_type)
             return {"success": True, "response": resp}
         except Exception as e:  # noqa: BLE001
