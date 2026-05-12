@@ -41,18 +41,40 @@ Arbitrage  Tail-End    Micro-Spread   DipArb        Smart-Copy ...
 * **Strict risk manager** — per-market and per-strategy exposure caps,
   daily / monthly loss caps, 10% drawdown triggers 50% sizing, four
   consecutive losses pause a strategy for an hour, API-error streak
-  triggers a global pause, and a remote **Telegram kill-switch**.
+  triggers a global pause.
+* **Budget-aware** — `BudgetProfile` auto-classifies your capital into
+  micro (≤ $50), small (≤ $300), standard (≤ $5k) or large tiers and
+  picks sensible sizes, caps and allowed strategies. Works on a $20–$30
+  account out of the box — see [docs/LOW_BUDGET_GUIDE.md](docs/LOW_BUDGET_GUIDE.md).
+* **Encrypted wallet** — Tier 1 keyring + Fernet by default; Tier 2
+  hardware, Tier 3 multi-wallet rotation and Tier 4 Cloud KMS stubs
+  for larger accounts. See [docs/WALLET_SECURITY.md](docs/WALLET_SECURITY.md).
 * **Paper trading first** — `MODE=paper` exercises the full pipeline
-  (scanner, strategies, queue, risk, slippage, executor, Telegram,
-  Supabase) without a single on-chain transaction.
+  (scanner, strategies, queue, risk, slippage, executor, notifications)
+  without a single on-chain transaction.
 * **Async, single-process** — one executor consumer, one scanner, one
   strategy loop per enabled strategy. Fits on a Mac Mini or a 1-CPU
   VPS.
-* **Rich terminal dashboard** with per-strategy stats, opportunity
-  queue, recent fills, and live connectivity.
-* **27 passing unit tests** covering the risk manager, priority queue,
-  arbitrage, tail-end, smart-copy wallet scoring, and the backtest
-  engine.
+* **Textual TUI** with reactive per-strategy stats, opportunity queue,
+  equity sparkline, and an interactive command bar (`/arb off`,
+  `/size tail_end 50`, `/pause`, `/resume 30m`, `/pnl week`, ...).
+* **Optional web dashboard** — `python main.py --dashboard web` spins
+  up a FastAPI + Chart.js page on `localhost:8080` with live WebSocket
+  updates.
+* **Multi-channel notifications** — desktop toasts (plyer), sound beeps
+  (beepy), Telegram (optional), email SMTP for criticals. Telegram is
+  **no longer required**.
+* **Hot-reload config** — edit `config_live.yaml` and the bot picks up
+  changes in under a second via watchdog. No restart required.
+* **Session reports** — HTML session summary written on shutdown with
+  equity curve, per-strategy stats, skip histogram and recommendations.
+* **Prometheus metrics** — opt in with `--metrics`; exposes
+  `bot_trades_total`, `bot_scan_duration_seconds`, `bot_equity_usdc`,
+  etc. on `:9090`.
+* **68 passing unit tests** covering risk manager, priority queue,
+  arbitrage, tail-end, smart-copy scoring, backtest engine,
+  notifications, wallet keyring, command processor, config watcher and
+  budget profile.
 
 ---
 
@@ -66,18 +88,30 @@ python3 -m venv .venv
 source .venv/bin/activate
 pip install -r requirements.txt
 
-cp .env.example .env
-# → edit .env: RPC URLs, POLY_PRIVATE_KEY/FUNDER, SMART_WALLETS, capital
+# One-time: encrypt your private key in the OS keyring
+python main.py --setup-wallet
 
-# Run in paper mode (default)
+cp .env.example .env
+# → edit .env: MODE, RPC URLs, POLY_FUNDER, TOTAL_CAPITAL_USDC
+
+# Run in paper mode (default) with the Textual TUI
 python main.py
+
+# Other entrypoints:
+python main.py --command "status"       # one-shot CLI
+python main.py --command "pnl week"     # print and exit
+python main.py --dashboard web          # web dashboard on :8080
+python main.py --dashboard tui+web      # both dashboards at once
+python main.py --metrics                # also expose :9090/metrics
 ```
 
-You should see a live Rich dashboard and per-strategy log lines. Stop
-with `Ctrl-C`; state is persisted to `bot_state.json`.
+Stop with `Ctrl-C`; state is persisted to `bot_state.json` and an HTML
+session report is written to `logs/session_YYYYMMDD_HHMMSS.html`.
 
 Full installation and configuration walkthrough: **[docs/SETUP.md](docs/SETUP.md)**.
 Per-strategy explanations and tuning guidance: **[docs/STRATEGIES.md](docs/STRATEGIES.md)**.
+Wallet tiers and threat model: **[docs/WALLET_SECURITY.md](docs/WALLET_SECURITY.md)**.
+Running on $20–$30: **[docs/LOW_BUDGET_GUIDE.md](docs/LOW_BUDGET_GUIDE.md)**.
 Wiring the bot to your Polymarket account and depositing USDC (**Spanish**):
 **[docs/CONECTAR_WALLET.md](docs/CONECTAR_WALLET.md)**.
 
@@ -87,14 +121,18 @@ Wiring the bot to your Polymarket account and depositing USDC (**Spanish**):
 
 ```
 Ranuk-Copy-Trading/
-├── main.py                          # async orchestrator
+├── main.py                          # async orchestrator + CLI dispatch
 ├── ecosystem.config.js              # PM2 process definition
 ├── pytest.ini
 ├── requirements.txt
 ├── .env.example
+├── config_live.yaml.example         # hot-reloadable runtime config
 ├── docs/
-│   ├── SETUP.md
-│   └── STRATEGIES.md
+│   ├── SETUP.md                     # install + RPC + Supabase + Telegram
+│   ├── STRATEGIES.md                # per-strategy guide
+│   ├── WALLET_SECURITY.md           # 4 wallet tiers + threat model  (v3)
+│   ├── LOW_BUDGET_GUIDE.md          # $20-$300 accounts                (v3)
+│   └── CONECTAR_WALLET.md           # Spanish wallet-linking walkthrough
 ├── bot/
 │   ├── config.py                    # typed env-driven config
 │   ├── logger.py                    # shared Rich console
@@ -104,11 +142,33 @@ Ranuk-Copy-Trading/
 │   ├── state.py                     # JSON + Supabase persistence
 │   ├── scanner.py                   # 5-second market scanner
 │   ├── executor.py                  # order dispatcher
-│   ├── dashboard.py                 # Rich live dashboard
+│   ├── core/                        # (v3) BudgetProfile + config watcher
+│   │   ├── budget.py
+│   │   └── config_watcher.py
+│   ├── monitoring/                  # (v3) TUI, commands, notifications, metrics
+│   │   ├── tui_app.py               # Textual app
+│   │   ├── dashboard.tcss
+│   │   ├── commands.py              # shared command processor
+│   │   ├── cli.py                   # --command one-shot entry
+│   │   ├── notifications.py         # desktop/sound/tg/email router
+│   │   ├── log_analyzer.py          # HTML session report
+│   │   └── metrics.py               # Prometheus endpoint
+│   ├── wallet/                      # (v3) 4-tier wallet security
+│   │   ├── base.py
+│   │   ├── secure_key.py            # Tier 1 — keyring + Fernet
+│   │   ├── plain_env.py             # Tier 0 — backward compat
+│   │   ├── hardware_wallet.py       # Tier 2 — Ledger/Trezor (stub)
+│   │   ├── multi_wallet.py          # Tier 3 — rotation/assigned
+│   │   ├── cloud_kms.py             # Tier 4 — AWS KMS/Vault (stub)
+│   │   ├── resolver.py              # env-driven tier selection
+│   │   └── wizard.py                # --setup-wallet interactive flow
+│   ├── web/                         # (v3) optional web dashboard
+│   │   ├── server.py                # FastAPI + WebSocket
+│   │   └── static/dashboard.html    # vanilla HTML + Chart.js
 │   ├── clients/
 │   │   ├── rpc.py                   # Polygon RPC with failover
 │   │   ├── polymarket.py            # Gamma + Data + CLOB wrappers
-│   │   ├── telegram.py              # alerts + kill-switch listener
+│   │   ├── telegram.py              # (optional) alerts
 │   │   ├── binance.py               # CEX confirmation for DipArb
 │   │   └── supabase_client.py       # optional fill mirror
 │   ├── strategies/
@@ -129,7 +189,12 @@ Ranuk-Copy-Trading/
     ├── test_arbitrage.py            # 4 tests
     ├── test_tail_end.py             # 5 tests
     ├── test_smart_copy_scoring.py   # 4 tests
-    └── test_backtest.py             # 1 test
+    ├── test_backtest.py             # 1 test
+    ├── test_notifications.py        # 6 tests    (v3)
+    ├── test_wallet_keyring.py       # 7 tests    (v3)
+    ├── test_tui_commands.py         # 15 tests   (v3)
+    ├── test_config_watcher.py       # 5 tests    (v3)
+    └── test_budget.py               # 8 tests    (v3)
 ```
 
 ---
@@ -154,7 +219,7 @@ Ranuk-Copy-Trading/
 
 ```bash
 pytest -q
-# 27 passed
+# 68 passed
 ```
 
 ---

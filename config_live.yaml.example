@@ -1,0 +1,38 @@
+# Hot-reloadable runtime config for the Polymarket trading bot.
+#
+# Copy to config_live.yaml — the bot watches that file with watchdog and
+# applies changes within ~1s without restarting. Anything NOT listed here
+# stays at its .env default. Set CONFIG_LIVE_PATH in .env to point here
+# if you want a different location.
+
+strategies:
+  arbitrage:
+    enabled: true
+    # Multiplier applied on top of budget-profile trade size. 1.0 = no change.
+    sizing: 1.0
+  tail_end:
+    enabled: true
+    sizing: 1.0
+  smart_copy:
+    enabled: true
+    sizing: 1.0
+  micro_spread:
+    enabled: false
+    sizing: 0.5
+  dip_arb:
+    enabled: false
+    sizing: 0.5
+  market_making:
+    enabled: false
+    sizing: 1.0
+  sniper:
+    enabled: false
+    sizing: 1.0
+
+risk:
+  # All values in USDC (absolute) — override the profile caps.
+  # Leave blank to fall back to the BudgetProfile auto-calculation.
+  daily_loss_cap: null
+  max_slippage: 0.02
+
+# Paper vs live cannot be hot-switched for safety; change .env and restart.

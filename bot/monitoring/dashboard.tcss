@@ -1,0 +1,78 @@
+/*
+ * Textual CSS for the Polymarket bot TUI.
+ *
+ * Layout:
+ *    ┌────────────── header (3 rows) ──────────────┐
+ *    │  Strategies   │   Scanner    │   Queue      │
+ *    │               │              │              │
+ *    ├────────────────────────┬─────────────────────┤
+ *    │       Fill log         │   Equity sparkline  │
+ *    ├────────────────────────┴─────────────────────┤
+ *    │     Command bar (dock=bottom, 3 rows)        │
+ *    └──────────────────────────────────────────────┘
+ */
+
+Screen {
+    background: $surface;
+}
+
+#main-grid {
+    layout: grid;
+    grid-size: 3 2;
+    grid-columns: 1fr 1fr 1fr;
+    grid-rows: 2fr 1fr;
+    grid-gutter: 0 0;
+    padding: 0;
+}
+
+.panel {
+    border: round $primary;
+    padding: 0 1;
+}
+
+.panel-title {
+    text-style: bold;
+    color: $secondary;
+    text-align: center;
+    height: 1;
+}
+
+#strategies-panel { border: round green; }
+#scanner-panel    { border: round blue; }
+#queue-panel      { border: round yellow; }
+#fills-panel      { border: round magenta; column-span: 2; }
+#chart-panel      { border: round cyan; }
+
+#strategies-table,
+#markets-table,
+#queue-table {
+    height: 1fr;
+    scrollbar-size: 1 1;
+}
+
+#fills-log {
+    height: 1fr;
+}
+
+#equity-spark {
+    height: 1fr;
+    color: green;
+}
+
+#command-bar {
+    dock: bottom;
+    border-top: tall $primary;
+    padding: 0 1;
+    height: 3;
+}
+
+#command-status {
+    dock: bottom;
+    height: 1;
+    padding: 0 1;
+    color: $text-muted;
+}
+
+Input:focus {
+    border: tall $accent;
+}
