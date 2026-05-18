@@ -259,14 +259,6 @@ class Executor:
             await self._record(
                 opp, status="rejected", reason="partial_fill", details=details
             )
-            await self._tg.send(
-                f"⚠️ Orden rechazada por Polymarket\n\n"
-                f"📌 Estrategia: {opp.strategy}\n"
-                f"🎯 Mercado: {opp.market_slug}\n"
-                f"❌ Motivo: La orden no se ejecutó en el exchange "
-                f"(probablemente no hay liquidez suficiente al precio pedido)\n"
-                f"💡 No se perdió dinero, el bot intentará de nuevo en el próximo ciclo."
-            )
 
     async def _send_leg(self, opp: Opportunity, leg: Leg) -> dict[str, Any]:
         """Send a single CLOB order. Returns a dict with success/response.
@@ -350,15 +342,8 @@ class Executor:
         if status in ("filled", "simulated"):
             self._risk.register_api_success()
             self._risk.register_fill(opp.strategy, pnl)
-            if status == "simulated":
-                await self._tg.send(
-                    f"📝 Trade simulado (paper mode)\n\n"
-                    f"📌 Estrategia: {opp.strategy}\n"
-                    f"🎯 Mercado: {opp.market_slug}\n"
-                    f"💰 PnL estimado: ${pnl:+.4f}\n"
-                    f"📊 Confianza: {opp.confidence*100:.0f}%"
-                )
-            else:
+            # Solo notificar fills REALES por Telegram (no paper, no spam)
+            if status == "filled":
                 await self._tg.send(
                     f"✅ ¡Orden ejecutada!\n\n"
                     f"📌 Estrategia: {opp.strategy}\n"
