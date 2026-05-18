@@ -133,6 +133,18 @@ class Executor:
 
         # 4. Reserve exposure up-front (released on failure)
         size_total = sum(leg.size_usdc for leg in opp.legs)
+
+        # 4b. In live mode, refuse to send if available balance is too low.
+        # This prevents the "not enough balance" spam from Polymarket.
+        if not CFG.is_paper:
+            avail = CFG.total_capital_usdc - sum(
+                self._risk.state.exposure_per_strategy.values()
+            )
+            if avail < size_total:
+                log.debug(f"{tag} -> skip: no balance (avail=${avail:.2f} < ${size_total:.2f})")
+                await self._record(opp, status="skipped", reason="no_balance")
+                return
+
         self._risk.reserve_exposure(opp.strategy, opp.market_id, size_total)
 
         # 5. Dispatch
