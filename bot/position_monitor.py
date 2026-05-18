@@ -273,7 +273,7 @@ class PositionMonitor:
             except Exception:  # noqa: BLE001
                 pass
             await self._tg.send(
-                f"📄 [PAPER] {reason.upper()} | {strategy}\n"
+                f"📄 Venta simulada (paper)\n\n📌 Estrategia: {strategy}\n🎯 Motivo: {reason}\n"
                 f"Entry: {entry_price:.4f} → Exit: {current_price:.4f}\n"
                 f"PnL: {pnl:+.4f} USDC"
             )
@@ -284,14 +284,14 @@ class PositionMonitor:
                 self._state.close_position(strategy, market_id, pnl)
                 log.info(f"[green]SELL executed[/] {reason} pnl={pnl:+.4f}")
                 await self._tg.send(
-                    f"{'🛑' if reason == 'stop_loss' else '🎯'} {reason.upper()} | {strategy}\n"
+                    f"{'🛑 Stop-Loss activado' if reason == 'stop_loss' else '🎯 Take-Profit alcanzado'}\n\n📌 Estrategia: {strategy}\n"
                     f"Entry: {entry_price:.4f} → Exit: {current_price:.4f}\n"
                     f"PnL: {pnl:+.4f} USDC"
                 )
             else:
                 log.error(f"[red]SELL FAILED[/] {reason}: {result.get('error')}")
                 await self._tg.send(
-                    f"⚠️ SELL FAILED ({reason}) | {strategy}\n"
+                    f"⚠️ Error al vender\n\n📌 Estrategia: {strategy}\n❌ Motivo: {reason}\n"
                     f"Error: {result.get('error')}"
                 )
 
@@ -360,7 +360,7 @@ class PositionMonitor:
                         f"recovered≈${potential_recovery:.3f}"
                     )
                     await self._tg.send(
-                        f"☠️ FORCED EXIT | {title}\n"
+                        f"☠️ Posición zombie liquidada\n\n🎯 Mercado: {title}\n"
                         f"Entry: ${avg_price:.4f} → Exit: ${cur_price:.6f}\n"
                         f"Recovered: ~${potential_recovery:.3f}"
                     )
@@ -386,7 +386,7 @@ class PositionMonitor:
                     pnl = (cur_price - avg_price) * size
                     log.info(f"[green]LIVE SELL OK[/] {title} pnl={pnl:+.4f}")
                     await self._tg.send(
-                        f"🛑 LIVE STOP-LOSS | {title}\n"
+                        f"🛑 Stop-Loss activado\n\n🎯 Mercado: {title}\n"
                         f"Entry: ${avg_price:.4f} → Exit: ${cur_price:.6f}\n"
                         f"PnL: ${pnl:+.4f}"
                     )
@@ -404,7 +404,7 @@ class PositionMonitor:
                     pnl = (cur_price - avg_price) * size
                     log.info(f"[green]LIVE SELL OK[/] {title} pnl={pnl:+.4f}")
                     await self._tg.send(
-                        f"🎯 LIVE TAKE-PROFIT | {title}\n"
+                        f"🎯 ¡Take-Profit alcanzado!\n\n🎯 Mercado: {title}\n"
                         f"Entry: ${avg_price:.4f} → Exit: ${cur_price:.4f}\n"
                         f"PnL: ${pnl:+.4f}"
                     )

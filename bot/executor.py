@@ -260,8 +260,12 @@ class Executor:
                 opp, status="rejected", reason="partial_fill", details=details
             )
             await self._tg.send(
-                f"⚠️ Order rejected: {opp.strategy} / {opp.market_slug}\n"
-                f"Filled {ok_count}/{len(opp.legs)} legs."
+                f"⚠️ Orden rechazada por Polymarket\n\n"
+                f"📌 Estrategia: {opp.strategy}\n"
+                f"🎯 Mercado: {opp.market_slug}\n"
+                f"❌ Motivo: La orden no se ejecutó en el exchange "
+                f"(probablemente no hay liquidez suficiente al precio pedido)\n"
+                f"💡 No se perdió dinero, el bot intentará de nuevo en el próximo ciclo."
             )
 
     async def _send_leg(self, opp: Opportunity, leg: Leg) -> dict[str, Any]:
@@ -346,11 +350,22 @@ class Executor:
         if status in ("filled", "simulated"):
             self._risk.register_api_success()
             self._risk.register_fill(opp.strategy, pnl)
-            await self._tg.send(
-                f"{'💸 [SIMULADO]' if status == 'simulated' else '✅ FILLED'} "
-                f"{opp.strategy} / {opp.market_slug}\n"
-                f"PnL: {pnl:+.4f} USDC | conf={opp.confidence:.2f}"
-            )
+            if status == "simulated":
+                await self._tg.send(
+                    f"📝 Trade simulado (paper mode)\n\n"
+                    f"📌 Estrategia: {opp.strategy}\n"
+                    f"🎯 Mercado: {opp.market_slug}\n"
+                    f"💰 PnL estimado: ${pnl:+.4f}\n"
+                    f"📊 Confianza: {opp.confidence*100:.0f}%"
+                )
+            else:
+                await self._tg.send(
+                    f"✅ ¡Orden ejecutada!\n\n"
+                    f"📌 Estrategia: {opp.strategy}\n"
+                    f"🎯 Mercado: {opp.market_slug}\n"
+                    f"💰 PnL: ${pnl:+.4f} USDC\n"
+                    f"📊 Confianza: {opp.confidence*100:.0f}%"
+                )
         elif status == "failed":
             self._risk.register_api_error()
         elif status == "rejected":
