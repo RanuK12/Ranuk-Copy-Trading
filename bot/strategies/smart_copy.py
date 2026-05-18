@@ -25,6 +25,11 @@ from typing import Iterable, Optional
 
 from bot.clients.polymarket import get_poly
 from bot.config import CFG
+from bot.intelligence import (
+    is_live_sports_event,
+    is_wallet_panic_selling,
+    orderbook_has_liquidity,
+)
 from bot.models import (
     Leg,
     Opportunity,
@@ -75,14 +80,36 @@ class SmartCopyStrategy(Strategy):
                 )
                 continue
 
-            trades = await self._poly.get_user_trades_async(wallet, limit=10)
+            trades = await self._poly.get_user_trades_async(wallet, limit=30)
+
+            # --- panic-sell / liquidation guard ------------------------------
+            # If the wallet is dumping positions at a big loss, their recent
+            # trades are NOT alpha — they're pain. Skip the entire wallet
+            # until the cascade passes.
+            panic, panic_reason = is_wallet_panic_selling(
+                trades,
+                lookback_seconds=CFG.panic_lookback_seconds,
+                min_sells=CFG.panic_min_sells,
+                price_drop_pct=CFG.panic_price_drop_pct,
+            )
+            if panic:
+                self.log.info(
+                    f"smart_copy skip wallet {wallet[:10]}...: {panic_reason}"
+                )
+                continue
+
             last_seen = self._state.get_last_seen_tx(wallet)
 
             # Walk in chronological order, stopping at the previously seen tx.
             new_trades = []
+            now_ts = time.time()
             for t in trades:
                 if t.get("transactionHash") == last_seen:
                     break
+                # Only copy trades from the last COPY_TRADE_LOOKBACK hours
+                ts = int(t.get("timestamp") or 0)
+                if ts and (now_ts - ts) > CFG.copy_trade_lookback_seconds:
+                    continue
                 new_trades.append(t)
 
             for trade in reversed(new_trades):
@@ -130,7 +157,7 @@ class SmartCopyStrategy(Strategy):
         score: WalletScore,
     ) -> Optional[Opportunity]:
         side = (trade.get("side") or "").upper()
-        if side != "BUY":  # only copy BUYs; spec permits toggle but default is BUYs
+        if side not in ("BUY", "SELL"):
             return None
         condition_id = trade.get("conditionId")
         token_id = trade.get("asset")
@@ -138,22 +165,122 @@ class SmartCopyStrategy(Strategy):
         if not condition_id or not token_id or price <= 0:
             return None
 
+        # Filter: don't copy BUYs at lottery prices (< COPY_MIN_ENTRY_PRICE)
+        if side == "BUY" and price < CFG.copy_min_entry_price:
+            self.log.debug(
+                f"smart_copy skip: price {price:.4f} < min {CFG.copy_min_entry_price}"
+            )
+            return None
+
+        # Filter: don't copy BUYs at prices too close to $1 (no edge)
+        if side == "BUY" and price > 0.95:
+            self.log.debug(f"smart_copy skip: price {price:.4f} too close to $1")
+            return None
+
+        # SELL: only if we have an open position on this market
+        if side == "SELL":
+            if not self._state.has_open_position(self.name, condition_id):
+                return None
+
         em = snap.markets.get(condition_id)
+        if em is not None:
+            if em.market.closed:
+                return None
+            if em.market.end_date:
+                try:
+                    end_dt = datetime.fromisoformat(em.market.end_date.replace("Z", "+00:00"))
+                    if end_dt < datetime.now(timezone.utc):
+                        return None
+                except Exception:  # noqa: BLE001
+                    pass
+
+        market_slug = trade.get("slug") or (em.market.slug if em else condition_id[:20])
+
+        # ------------------------------------------------------------------
+        # Sports / fast-resolving market guard (BUY only).
+        #
+        # The copy feed is polled every few seconds, but a proxy wallet's
+        # trades surface in Polymarket's data-api with 30-60s delay. For
+        # sports events the price can collapse from 0.97 -> 0.10 inside a
+        # single half, so by the time we replicate we'd be buying a losing
+        # ticket at the original (stale) price. Reject if:
+        #   * the market resolves in less than COPY_MIN_HOURS_TO_END hours
+        #   * or the live ask has already drifted > COPY_MAX_PRICE_DRIFT_PCT
+        #     from the source trade price.
+        # ------------------------------------------------------------------
+        if side == "BUY" and em is not None:
+            if em.market.end_date:
+                try:
+                    end_dt = datetime.fromisoformat(em.market.end_date.replace("Z", "+00:00"))
+                    hours_to_end = (end_dt - datetime.now(timezone.utc)).total_seconds() / 3600.0
+                    if hours_to_end < CFG.copy_min_hours_to_end:
+                        self.log.info(
+                            f"smart_copy skip (end soon): {market_slug[:40]} "
+                            f"{hours_to_end:.2f}h < {CFG.copy_min_hours_to_end}h"
+                        )
+                        return None
+                except Exception:  # noqa: BLE001
+                    pass
+
+            # Live-sports detection: short-duration sports event that's
+            # currently being played (volatile book, resolves within hours).
+            is_live, live_reason = is_live_sports_event(
+                slug=em.market.slug,
+                question=em.market.question,
+                end_date=em.market.end_date,
+                yes_ask=em.yes_ask,
+                yes_bid=em.yes_bid,
+                no_ask=em.no_ask,
+                live_window_hours=CFG.copy_min_hours_to_end * 2,
+            )
+            if is_live:
+                self.log.info(
+                    f"smart_copy skip (live event): {market_slug[:40]} {live_reason}"
+                )
+                return None
+
+            # Live price divergence check: don't chase a crashing market.
+            live_ask = em.yes_ask if str(em.market.yes_token_id) == str(token_id) else em.no_ask
+            if live_ask is not None and live_ask > 0:
+                drift = abs(live_ask - price) / price
+                if drift > CFG.copy_max_price_drift:
+                    self.log.info(
+                        f"smart_copy skip (drift): {market_slug[:40]} "
+                        f"source={price:.4f} live={live_ask:.4f} drift={drift:.1%}"
+                    )
+                    return None
+                # Also refuse to buy if live price dropped under floor even though
+                # the copied trade was above it.
+                if live_ask < CFG.copy_min_entry_price:
+                    self.log.info(
+                        f"smart_copy skip (live below floor): {market_slug[:40]} "
+                        f"live={live_ask:.4f} < floor={CFG.copy_min_entry_price}"
+                    )
+                    return None
+
         size = self.size_usdc()
+        opp_side = Side.BUY if side == "BUY" else Side.SELL
         leg = Leg(
             token_id=str(token_id),
-            side=Side.BUY,
+            side=opp_side,
             size_usdc=size,
             kind=OrderKind.LIMIT,
-            limit_price=round(price * (1 + CFG.max_slippage), 4),
+            limit_price=round(price * (1 + CFG.max_slippage), 4) if side == "BUY" else round(price * (1 - CFG.max_slippage), 4),
         )
+
+        # Dynamic confidence: higher entry price = higher probability of resolving to $1
+        # Price 0.50 → conf 0.50, Price 0.70 → conf 0.70, Price 0.90 → conf 0.90
+        confidence = min(0.95, max(price, score.win_rate))
+        # Expected profit: (1 - price) is the max upside if it resolves YES
+        expected_profit = (1.0 - price) / price if side == "BUY" else 0.05
+
         return Opportunity(
             strategy=self.name,
             market_id=condition_id,
-            market_slug=trade.get("slug") or condition_id,
+            market_slug=market_slug,
             priority=PRIORITY_SMART_COPY,
-            confidence=min(0.95, score.win_rate),
-            expected_profit_pct=0.05,  # conservative
+            confidence=confidence,
+            expected_profit_pct=expected_profit,
             legs=[leg],
             reference_price=price,
             max_slippage=CFG.max_slippage,
@@ -161,7 +288,7 @@ class SmartCopyStrategy(Strategy):
                 "source_wallet": wallet,
                 "detected_price": price,
                 "side": side,
-                "market_volume": em.market.volume_usdc if em else None,
+                "market_volume": em.market.volume_usdc if em else 0,
                 "wallet_win_rate": score.win_rate,
                 "wallet_profit_factor": score.profit_factor,
             },

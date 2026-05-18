@@ -59,14 +59,14 @@ def _derive_fernet_key(password: str, salt: bytes) -> bytes:
 def _address_from_private_key(private_key: str) -> str:
     """Derive the checksum address from a hex private key.
 
-    Uses eth_account which is already a transitive dep via web3/py-clob-client.
+    Uses eth_account which is already a transitive dep via web3/py-clob-client-v2.
     """
     try:
         from eth_account import Account  # type: ignore
     except Exception as e:  # noqa: BLE001
         raise SignerError(
             "eth_account is required to derive wallet addresses. "
-            f"Install web3/py-clob-client to get it. ({e})"
+            f"Install web3/py-clob-client-v2 to get it. ({e})"
         )
     pk = private_key.strip()
     if not pk.startswith("0x"):

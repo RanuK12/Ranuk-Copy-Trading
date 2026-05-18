@@ -71,7 +71,7 @@ class Config:
     poly_private_key: str = _env("POLY_PRIVATE_KEY")
     poly_funder: str = _env("POLY_FUNDER")
     poly_api_key: str = _env("POLY_API_KEY")
-    poly_signature_type: int = _env_int("POLY_SIGNATURE_TYPE", 1)
+    poly_signature_type: int = _env_int("POLY_SIGNATURE_TYPE", 3)
 
     # ---- Polymarket APIs ----
     clob_host: str = _env("CLOB_HOST", "https://clob.polymarket.com")
@@ -114,6 +114,7 @@ class Config:
 
     tail_end_max_days: int = _env_int("TAIL_END_MAX_DAYS", 7)
     tail_end_min_price: float = _env_float("TAIL_END_MIN_PRICE", 0.93)
+    tail_end_min_edge: float = _env_float("TAIL_END_MIN_EDGE", 0.05)
     tail_end_stop_loss: float = _env_float("TAIL_END_STOP_LOSS", 0.88)
 
     micro_price_min: float = _env_float("MICRO_PRICE_MIN", 0.05)
@@ -133,6 +134,49 @@ class Config:
     copy_min_total_pnl: float = _env_float("COPY_MIN_TOTAL_PNL_USDC", 500.0)
     copy_min_consistency: float = _env_float("COPY_MIN_CONSISTENCY", 0.70)
     copy_max_single_trade_pct: float = _env_float("COPY_MAX_SINGLE_TRADE_PCT", 0.30)
+
+    # ---- Position Monitor (Stop-Loss / Take-Profit) ----
+    stop_loss_pct: float = _env_float("STOP_LOSS_PCT", 0.25)  # -25%
+    take_profit_pct: float = _env_float("TAKE_PROFIT_PCT", 0.40)  # +40%
+    position_monitor_interval: float = _env_float("POSITION_MONITOR_INTERVAL", 30.0)
+    copy_min_entry_price: float = _env_float("COPY_MIN_ENTRY_PRICE", 0.15)  # no copiar <15¢
+
+    # ---- Smart-copy guardrails (prevent copying already-lost sports bets) ----
+    # Minimum hours until market end_date — rejects same-day sports events
+    # whose price can collapse before our order fills.
+    copy_min_hours_to_end: float = _env_float("COPY_MIN_HOURS_TO_END", 3.0)
+    # Reject a copy if the live ask has drifted more than this fraction from
+    # the source trade price (e.g. 0.20 = 20% divergence).
+    copy_max_price_drift: float = _env_float("COPY_MAX_PRICE_DRIFT", 0.20)
+    # Window (seconds) within which a smart wallet's trades are still
+    # considered fresh enough to copy. Longer = more trades available,
+    # but also staler alpha. Default 6h.
+    copy_trade_lookback_seconds: int = _env_int("COPY_TRADE_LOOKBACK_SECONDS", 21600)
+
+    # ---- Panic-sell wallet detector ----
+    # Rolling window (seconds) in which we look for liquidation patterns.
+    panic_lookback_seconds: int = _env_int("PANIC_LOOKBACK_SECONDS", 3600)
+    # Minimum number of SELL trades in the window to consider a cascade.
+    panic_min_sells: int = _env_int("PANIC_MIN_SELLS", 3)
+    # Price drop threshold (fraction) from best recent BUY to SELL.
+    panic_price_drop_pct: float = _env_float("PANIC_PRICE_DROP_PCT", 0.30)
+
+    # ---- Risk-adjusted edge (tail_end) ----
+    # Minimum (1 - entry) / (entry - stop_loss) ratio to accept a trade.
+    # Defaults to 1.0 so we only take trades where upside >= downside.
+    tail_end_min_rr_ratio: float = _env_float("TAIL_END_MIN_RR_RATIO", 1.0)
+
+    # ---- Orderbook liquidity gate ----
+    liquidity_max_spread: float = _env_float("LIQUIDITY_MAX_SPREAD", 0.05)
+    liquidity_min_depth_multiplier: float = _env_float(
+        "LIQUIDITY_MIN_DEPTH_MULTIPLIER", 1.5
+    )
+
+    # ---- Max-hold timer ----
+    # Force-exit any position open longer than this many seconds, regardless
+    # of SL/TP. Defaults to 12 hours so zombie positions can't tie up capital
+    # indefinitely waiting for a market to resolve.
+    max_hold_seconds: float = _env_float("MAX_HOLD_SECONDS", 12 * 3600)
 
     mm_max_total_price: float = _env_float("MM_MAX_TOTAL_PRICE", 0.98)
     mm_ladder_levels: int = _env_int("MM_LADDER_LEVELS", 3)

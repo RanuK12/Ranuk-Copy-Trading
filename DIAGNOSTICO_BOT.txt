@@ -1,0 +1,209 @@
+# PROMPT PARA KIMI 2.6 — Diagnóstico y Fix del Bot de Copy Trading Polymarket
+
+## CONTEXTO
+Tengo un bot de copy trading para Polymarket corriendo en mi Mac. El repositorio está en:
+```
+/Users/emilioranucoli/Desktop/Oficina_Ranuk/Bot-Copy-Trading-Ranuk/
+```
+GitHub: https://github.com/RanuK12/Ranuk-Copy-Trading
+
+El bot lleva **5+ horas corriendo en modo LIVE** con $20.80 USDC de capital y **NO HA EJECUTADO NI UN SOLO TRADE**. El heartbeat muestra `queue=0 fills=45 equity=$20.80 pnl_day=+0.00` — la cola siempre vacía, cero movimiento de dinero.
+
+## ARQUITECTURA DEL BOT
+```
+MarketScanner (5s loop) → fetch 500 markets de Gamma API
+      ↓
+  Enrichment (top 40 por prioridad) → orderbook data del CLOB
+      ↓
+  Bucketing → clasifica en: tail_end, arbitrage, sniper, etc.
+      ↓
+  Strategies → tail_end, smart_copy, sniper generan Opportunity
+      ↓
+  Executor → risk.allow() → slippage check → post order al CLOB
+```
+
+## ARCHIVOS CLAVE QUE DEBES LEER
+1. `bot/scanner.py` — El scanner que clasifica mercados. PROBLEMA CRÍTICO aquí.
+2. `bot/strategies/tail_end.py` — Estrategia de alta probabilidad pre-resolución.
+3. `bot/strategies/smart_copy.py` — Copia trades de wallets elite.
+4. `bot/executor.py` — Ejecuta órdenes (paper o live via py-clob-client).
+5. `bot/risk.py` — Risk manager con kill switch, loss caps, drawdown.
+6. `bot/config.py` — Lee el .env y expone CFG.
+7. `bot/clients/polymarket.py` — Wrapper HTTP para Gamma API, Data API, CLOB API.
+8. `.env` — Configuración actual (NO subir a git, está en .gitignore).
+
+## LOS 3 PROBLEMAS RAÍZ IDENTIFICADOS
+
+### PROBLEMA 1: El Scanner no ve mercados deportivos (CRÍTICO)
+**Causa:** La API Gamma (`gamma-api.polymarket.com/markets`) NO retorna los mercados deportivos de corto plazo (NBA, UFC, fútbol, esports). Estos mercados se manejan en un sistema de eventos separado dentro de Polymarket. 
+
+**Evidencia:** Cuando busco los trades de las wallets elite (surfandturf, JewishNinja, etc.), sus trades son en mercados como "Thunder vs Lakers", "UFC 328", "FC Barcelona vs Real Madrid" — pero NINGUNO de estos mercados aparece en la respuesta de `gamma-api.polymarket.com/markets?active=true&limit=500`.
+
+**Lo que hace falta:** Investigar cómo se accede a los mercados deportivos. Opciones posibles:
+- La API Gamma podría tener parámetros diferentes (¿`tag=sports`? ¿un endpoint `/events` con más detalle?)
+- La API CLOB directamente (`clob.polymarket.com`) podría listar estos mercados
+- Polymarket podría tener una API de deportes separada
+- Quizás los mercados deportivos usan el endpoint `/events` en vez de `/markets`
+- Ver la documentación: https://docs.polymarket.com/api-reference
+
+### PROBLEMA 2: tail_end no encuentra mercados elegibles
+**Causa:** De 500 mercados que retorna la API, solo 7 resuelven dentro de 14 días, y NINGUNO tiene precio ≥ 0.80. Los mercados son todos de largo plazo:
+- GTA VI (julio 2026)
+- NHL Stanley Cup (junio 2026) 
+- Primarias Texas (mayo 25)
+- Geopolítica (fin de año)
+
+**Config actual en .env:**
+```
+TAIL_END_MAX_DAYS=14
+TAIL_END_MIN_PRICE=0.80
+TAIL_END_STOP_LOSS=0.72
+```
+
+**Lo que hace falta:** Si logramos traer los mercados deportivos, estos SÍ tienen precios altos (>0.80) y resuelven en horas — perfecto para tail_end.
+
+### PROBLEMA 3: smart_copy genera señales pero el slippage guard las mata
+**Causa:** Los trades que detecta de las wallets son de mercados deportivos de AYER que ya se resolvieron. Cuando el bot intenta verificar el precio live (`get_price()`), retorna `None` porque el mercado ya no existe → "no live price; abort" o "slippage exceeded".
+
+**Logs reales:**
+```
+WARNING  smart_copy market=nba-okc-lal-2026-05-11 legs=1 ref=0.18 edge=+5.00% -> no live price; abort.
+WARNING  smart_copy market=fed-rate-hike-in-2026 legs=1 ref=0.18 edge=+5.00% -> slippage exceeded current=0.2600 cap=0.1836
+```
+
+**Lo que hace falta:** smart_copy necesita filtrar trades donde el mercado aún existe y tiene liquidez activa, no intentar copiar trades de mercados ya cerrados.
+
+## ESTADO ACTUAL DEL .ENV (valores relevantes)
+```
+MODE=live
+TOTAL_CAPITAL_USDC=20.80
+DEFAULT_TRADE_SIZE_USDC=2
+STRATEGIES_ENABLED=tail_end,smart_copy,sniper
+
+POLY_FUNDER=0x1a1405f39232734ef1dbcf9ef06b9da72885f575
+POLY_SIGNATURE_TYPE=1
+POLY_PRIVATE_KEY=<configurada>
+
+CLOB_HOST=https://clob.polymarket.com
+DATA_API_HOST=https://data-api.polymarket.com
+GAMMA_API_HOST=https://gamma-api.polymarket.com
+
+ALCHEMY_HTTP_URL=https://polygon-bor-rpc.publicnode.com
+
+TAIL_END_MAX_DAYS=14
+TAIL_END_MIN_PRICE=0.80
+TAIL_END_STOP_LOSS=0.72
+
+SMART_WALLETS=0xa380c504...,0x9f2fe025...,0xd7f85d0e... (10 wallets del leaderboard)
+COPY_MIN_WIN_RATE=0.0       # relajados porque la Data API no calcula bien el scoring
+COPY_MIN_PROFIT_FACTOR=0.0
+COPY_MIN_TOTAL_PNL_USDC=0
+COPY_MIN_CONSISTENCY=0.0
+COPY_MAX_SINGLE_TRADE_PCT=1.0
+
+POLY_RATE_LIMIT_PER_MIN=90
+SCAN_INTERVAL_SECONDS=5
+```
+
+## SMART WALLETS CONFIGURADAS (del leaderboard real)
+| Nombre | Wallet | Profit | Especialidad |
+|--------|--------|--------|-------------|
+| JewishNinja | 0xa380c504...b9b21ff | +$1.05M | UFC, deportes |
+| surfandturf | 0x9f2fe025...2d2ca8 | +$1.74M | NBA, fútbol |
+| tdrhrhhd | 0xd7f85d0e...1289e4 | +$774K | Política, crypto, geopolítica |
+| Golgatha | 0xbc7ab791...a96940 | +$606K | UFC |
+| Talvez10 | 0xa71093ca...7923c4 | +$784K | Multimercado |
+| influenz.eth | 0xe8dd7741...6ec86 | +$714K | Diversificado |
+| RJW1 | 0x85f031d0...de3f67 | +$571K | Activo |
+| downtownfee | 0xbee54d90...fca636 | +$625K | Fútbol europeo |
+| jdsahgf | 0xa1360dbb...c97de | — | Fútbol + Sports |
+| yaya88888 | 0xce9d1756...ff402 | +$564K | Top 20 leaderboard |
+
+**Problema:** La mayoría opera en mercados deportivos que la API Gamma no retorna.
+
+## FIXES QUE YA HICE (para que no los repitas)
+1. ✅ `bot/executor.py:268` — Corregí `OrderType.GTC if ... else OrderType.GTC` → `...else OrderType.FOK`
+2. ✅ `bot/executor.py:130-162` — Mejoré paper PnL para usar precios live
+3. ✅ `bot/scanner.py:143-153` — Priorización de mercados que resuelven pronto en enrichment
+4. ✅ `requirements.txt` — Fix de dependencias para Python 3.14
+5. ✅ RPCs redundantes configurados (publicnode.com)
+6. ✅ Smart wallets configuradas con 10 wallets del leaderboard verificadas
+
+## LO QUE NECESITO QUE HAGAS
+
+### Prioridad 1: Hacer que el bot ENCUENTRE y EJECUTE trades
+1. **Investigar la API de Polymarket para mercados deportivos/eventos de corto plazo.** La documentación está en https://docs.polymarket.com. Los mercados deportivos (NBA, UFC, fútbol, esports) existen en Polymarket pero no aparecen en `gamma-api.polymarket.com/markets`. Necesito encontrar el endpoint correcto.
+
+2. **Modificar `bot/scanner.py` y/o `bot/clients/polymarket.py`** para que el scanner también traiga estos mercados deportivos de corto plazo. Probablemente necesites:
+   - Agregar un segundo fetch al scanner (mercados deportivos)
+   - O cambiar los parámetros del fetch existente
+   - O usar un endpoint diferente
+
+3. **Mejorar `bot/strategies/smart_copy.py`** para que filtre trades de mercados ya cerrados ANTES de intentar ejecutarlos (evitar los "no live price; abort").
+
+### Prioridad 2: Optimizar para $20 de capital
+4. Buscar wallets del leaderboard que operen en mercados que SÍ están disponibles en la API (política, crypto, geopolítica) — no solo deportes.
+
+5. Considerar crear una nueva estrategia más simple que funcione con los mercados disponibles (ej: comprar outcomes a >0.90 en mercados de política que están claramente decididos pero aún no resolvieron).
+
+### Prioridad 3: Mejorar la observabilidad
+6. Agregar logs más claros que muestren: cuántos mercados se escanearon, cuántos pasaron el filtro de cada estrategia, por qué se rechazaron las oportunidades.
+
+### Prioridad 4: Auto-descubrimiento y rotación automática de wallets (IMPORTANTE)
+Actualmente las 10 wallets están hardcodeadas en el .env como `SMART_WALLETS=0x...,0x...`. Esto es un problema porque:
+- Las wallets cambian de estrategia, dejan de operar, o pierden su edge
+- La lista se desactualiza y el bot copia señales de wallets inactivas
+- No hay forma de descubrir nuevos traders exitosos automáticamente
+
+**Lo que necesito:** Un sistema de **auto-discovery** que corra 2 veces al día (ej: 8:00 AM y 8:00 PM UTC) y haga:
+
+1. **Scrape del leaderboard de Polymarket** — consultar `https://data-api.polymarket.com/leaderboard` o el endpoint equivalente para obtener los top traders actuales
+2. **Filtrar por criterios inteligentes adaptados a nuestro presupuesto:**
+   - Preferir traders con ROI % alto (no solo PnL absoluto alto)
+   - Preferir traders que operen en mercados que la API Gamma SÍ retorna (política, crypto, geopolítica) — no solo deportes
+   - Preferir traders con actividad reciente (trades en las últimas 48h)
+   - Preferir traders con trades de tamaño moderado (no mega-whales que ponen $100K por trade)
+   - Mínimo 50+ trades resueltos para filtrar suerte
+   - Win rate entre 55%-75% (el sweet spot, no 90%+ que suele ser suerte)
+3. **Score y ranking** — puntuar cada wallet candidata y seleccionar los top 10-15
+4. **Actualización automática** — actualizar la lista de `SMART_WALLETS` en runtime sin reiniciar el bot (usar el sistema de hot-reload de `config_live.yaml` que ya existe, o modificar `CFG.smart_wallets` en memoria)
+5. **Logging** — registrar cada rotación: qué wallets se agregaron, cuáles se removieron, y por qué
+
+**Esquema de evolución por presupuesto:**
+- **$20 (actual):** Copiar solo trades en mercados de resolución corta, size $2-$5. Wallets enfocadas en política/crypto.
+- **$50-$100:** Ampliar a deportes si se logra integrar la API deportiva. Habilitar sniper con más budget.
+- **$200+:** Activar micro_spread y dip_arb. Copiar wallets con trades más grandes.
+- **$500+:** Full multi-strategy. Copiar a mega-whales con sizing proporcional.
+
+El bot debería escalar automáticamente las estrategias habilitadas y los tipos de wallets a copiar según crezca `TOTAL_CAPITAL_USDC`.
+
+**Implementación sugerida:**
+- Crear un nuevo módulo `bot/wallet_discovery.py`
+- Que corra como un task asyncio paralelo al scanner (similar a cómo corren las estrategias)
+- Usar el endpoint `data-api.polymarket.com` para obtener datos de traders
+- Guardar historial de wallets descubiertas en `bot_state.json` o archivo aparte
+- Integrar con el `config_live.yaml` para hot-reload sin reiniciar
+
+## INSTRUCCIONES DE EJECUCIÓN
+```bash
+cd /Users/emilioranucoli/Desktop/Oficina_Ranuk/Bot-Copy-Trading-Ranuk/
+source .venv/bin/activate
+python main.py --dashboard web    # Dashboard en http://localhost:8080
+```
+
+## SEGURIDAD
+- El `.env` contiene mi private key. NUNCA la subas a git ni la muestres.
+- El `.gitignore` ya excluye `.env` y `*.env.*`
+- Cualquier cambio de código puede ir a git, pero NO el .env.
+- Todas las credenciales deben manejarse solo vía .env, nunca hardcodeadas.
+
+## RESULTADO ESPERADO
+Después de tus cambios, el bot debería:
+1. Escanear mercados deportivos/eventos de corto plazo además de los largos
+2. Encontrar oportunidades reales (queue > 0)
+3. Ejecutar al menos algunos trades pequeños ($2-$5) en mercados activos
+4. Mostrar actividad real en el dashboard (fills con PnL ≠ 0)
+5. **Auto-descubrir y rotar wallets 2x al día** sin intervención manual
+6. **Escalar automáticamente** estrategias y wallets según crezca el capital
+
+El capital es de $20.80. No necesito que gane mucho — necesito que FUNCIONE y haga trades reales para validar que la infraestructura opera correctamente. A medida que demuestre rentabilidad, iré escalando el capital y el bot debe adaptarse automáticamente.

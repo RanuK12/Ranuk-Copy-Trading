@@ -24,7 +24,7 @@ Arbitrage  Tail-End    Micro-Spread   DipArb        Smart-Copy ...
                 │          Executor           │
                 │  risk.allow()  +  slippage  │
                 │  paper : [SIMULADO]         │
-                │  live  : py-clob-client FOK │
+                │  live  : py-clob-client-v2 FOK │
                 └─────────────┬───────────────┘
                               │
                  state.json / Supabase / Telegram

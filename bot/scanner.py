@@ -113,12 +113,15 @@ class MarketSnapshot:
 class MarketScanner:
     """Builds a fresh :class:`MarketSnapshot` on a fixed cadence."""
 
-    def __init__(self, *, max_enrich_per_scan: int = 40) -> None:
+    def __init__(self, *, max_enrich_per_scan: int = 30) -> None:
         self._poly = get_poly()
+        # 30 markets × 2 orderbooks = 60 req per scan, fits the 90 req/min
+        # rate limit with headroom for strategy loops.
         self._max_enrich = max_enrich_per_scan
         self._snapshot = MarketSnapshot()
         self._lock = asyncio.Lock()
         self._errors = 0
+        self._scanning = False
 
     @property
     def snapshot(self) -> MarketSnapshot:
@@ -130,27 +133,44 @@ class MarketScanner:
     async def scan_once(self) -> MarketSnapshot:
         t0 = time.monotonic()
         try:
-            raw = await self._poly.fetch_active_markets_async(limit=500)
+            raw_general, raw_sports = await asyncio.gather(
+                self._poly.fetch_active_markets_async(limit=500),
+                self._poly.fetch_sports_markets_async(limit=200),
+                return_exceptions=True,
+            )
         except Exception as e:  # noqa: BLE001
             self._errors += 1
             log.warning(f"[yellow]Gamma fetch failed:[/] {e}")
             return self._snapshot
 
         enriched: dict[str, EnrichedMarket] = {}
-        for m in raw:
+        for m in raw_general if not isinstance(raw_general, Exception) else []:
+            enriched[m.condition_id] = EnrichedMarket(market=m)
+        sports_added = 0
+        for m in raw_sports if not isinstance(raw_sports, Exception) else []:
+            if m.condition_id not in enriched:
+                sports_added += 1
             enriched[m.condition_id] = EnrichedMarket(market=m)
 
         # Pick the most promising candidates for orderbook enrichment.
         # Heuristics (cheap, pre-orderbook):
-        #   * markets resolving soon (<=7 days) get highest priority
-        #   * then crypto 15m       -> DipArb / MM / Micro-Spread
-        #   * then highest volume   -> better liquidity
+        #   * medium-horizon markets (2-14d) get priority 0 — the best
+        #     tail_end band, not yet priced at 0.99+.
+        #   * very-near (≤2d) markets priority 1 — often already in 0.99
+        #     territory but still useful for arbitrage.
+        #   * crypto 15m priority 2 — DipArb / MM / Micro-Spread.
+        #   * otherwise priority 3 — fall back to volume ordering.
         def _enrich_priority(e: EnrichedMarket) -> tuple:
             days = e.days_to_resolution()
-            # Resolves within 7 days → priority 0 (highest)
-            resolves_soon = 0 if (days is not None and 0 < days <= 7) else 2
-            is_crypto = 0 if e.is_crypto_15m() else 1
-            return (resolves_soon, is_crypto, -e.market.volume_usdc)
+            if days is not None and 2 < days <= 14:
+                bucket = 0  # sweet spot for tail_end
+            elif days is not None and 0 < days <= 2:
+                bucket = 1  # very near, high probability for arb
+            elif e.is_crypto_15m():
+                bucket = 2  # crypto 15m
+            else:
+                bucket = 3  # fallback by volume
+            return (bucket, -e.market.volume_usdc)
 
         candidates = sorted(
             enriched.values(),
@@ -170,8 +190,11 @@ class MarketScanner:
         async with self._lock:
             self._snapshot = snap
         self._errors = 0
-        log.debug(
-            f"scan: {len(enriched)} markets | enriched={len(candidates)} | "
+        log.info(
+            f"[cyan]scan:[/] {len(enriched)} markets "
+            f"(general={len(raw_general) if not isinstance(raw_general, Exception) else 'ERR'}, "
+            f"sports={len(raw_sports) if not isinstance(raw_sports, Exception) else 'ERR'}, "
+            f"new_sports={sports_added}) | enriched={len(candidates)} | "
             f"arb={len(snap.arbitrage_candidates)} "
             f"tail={len(snap.tail_end_candidates)} "
             f"micro={len(snap.micro_spread_candidates)} "
@@ -182,11 +205,30 @@ class MarketScanner:
         return snap
 
     async def _enrich(self, em: EnrichedMarket) -> None:
+        """Populate best bid / ask for both outcome tokens.
+
+        Polymarket's ``/book`` endpoint returns orderbook levels sorted in
+        a way that ``[0]`` is the *worst* (deepest) quote, not the best.
+        For the tight top-of-book we need, the ``/price`` endpoint is the
+        source of truth:
+
+          * ``/price?side=BUY``  -> price *you* pay to buy  (best ask)
+          * ``/price?side=SELL`` -> price *you* receive on a sell (best bid)
+
+        We fire all four requests concurrently so the scan stays fast.
+        """
         try:
-            book_yes = await self._poly.get_order_book_async(em.market.yes_token_id)
-            book_no = await self._poly.get_order_book_async(em.market.no_token_id)
-            em.yes_bid, em.yes_ask = _best_bid_ask(book_yes)
-            em.no_bid, em.no_ask = _best_bid_ask(book_no)
+            yes_ask, yes_bid, no_ask, no_bid = await asyncio.gather(
+                self._poly.get_price_async(em.market.yes_token_id, "BUY"),
+                self._poly.get_price_async(em.market.yes_token_id, "SELL"),
+                self._poly.get_price_async(em.market.no_token_id, "BUY"),
+                self._poly.get_price_async(em.market.no_token_id, "SELL"),
+                return_exceptions=True,
+            )
+            em.yes_ask = yes_ask if isinstance(yes_ask, (int, float)) else None
+            em.yes_bid = yes_bid if isinstance(yes_bid, (int, float)) else None
+            em.no_ask = no_ask if isinstance(no_ask, (int, float)) else None
+            em.no_bid = no_bid if isinstance(no_bid, (int, float)) else None
             em.enriched_at = time.time()
         except Exception as e:  # noqa: BLE001
             log.debug(f"enrich {em.market.slug} failed: {e}")
@@ -195,7 +237,14 @@ class MarketScanner:
     # Classification
     # ------------------------------------------------------------------
     def _bucket(self, snap: MarketSnapshot) -> None:
+        skipped_past = 0
         for em in snap.markets.values():
+            # Skip markets that already resolved (end_date in the past).
+            days = em.days_to_resolution()
+            if days is not None and days <= 0:
+                skipped_past += 1
+                continue
+
             # Arbitrage: both asks present, YES_ask + NO_ask < 1 - min_profit
             if em.yes_ask is not None and em.no_ask is not None:
                 s = em.yes_ask + em.no_ask
@@ -205,7 +254,14 @@ class MarketScanner:
                 ):
                     snap.arbitrage_candidates.append(em)
 
-            # Tail-end: high-confidence (> min_price) resolving soon
+            # Tail-end: high-confidence (> min_price) resolving soon.
+            #
+            # Only accept markets where the leading ask is in the
+            # [min_price, 0.98] band — anything >= 0.99 has no edge left
+            # (``(1 - price) < min_edge``) and just wastes the strategy
+            # loop's time. We also require the complementary side to be
+            # consistent (both > 0.99 signals a stale book, not a real
+            # opportunity).
             days = em.days_to_resolution()
             if (
                 days is not None
@@ -213,13 +269,12 @@ class MarketScanner:
                 and em.yes_ask is not None
                 and em.no_ask is not None
             ):
-                for token_id, price in (
-                    (em.market.yes_token_id, em.yes_ask),
-                    (em.market.no_token_id, em.no_ask),
+                lead_ask = max(em.yes_ask, em.no_ask)
+                if (
+                    CFG.tail_end_min_price <= lead_ask <= 0.98
+                    and (em.yes_ask < 0.99 or em.no_ask < 0.99)
                 ):
-                    if price >= CFG.tail_end_min_price:
-                        snap.tail_end_candidates.append(em)
-                        break
+                    snap.tail_end_candidates.append(em)
 
             # Micro-spread: cheap outcomes, wide spread, active volume
             if em.yes_bid is not None and em.yes_ask is not None:
@@ -249,10 +304,17 @@ class MarketScanner:
             f"enrich_top={self._max_enrich})"
         )
         while True:
+            if self._scanning:
+                log.debug("Previous scan still running; skipping this cycle.")
+                await asyncio.sleep(CFG.scan_interval)
+                continue
+            self._scanning = True
             try:
                 await self.scan_once()
             except Exception as e:  # noqa: BLE001
                 log.exception(f"scan_once crashed: {e}")
+            finally:
+                self._scanning = False
             await asyncio.sleep(CFG.scan_interval)
 
 
