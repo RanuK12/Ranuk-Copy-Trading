@@ -29,6 +29,18 @@ def _tmp_state_file(monkeypatch):
     with tempfile.TemporaryDirectory() as td:
         state = Path(td) / "state.json"
         monkeypatch.setenv("STATE_FILE", str(state))
+        monkeypatch.setenv("TOTAL_CAPITAL_USDC", "1000")
+        monkeypatch.setenv("DEFAULT_TRADE_SIZE_USDC", "20")
+        monkeypatch.setenv("MODE", "paper")
+        monkeypatch.setenv("STRATEGIES_ENABLED", "arbitrage,tail_end")
+        monkeypatch.setenv("MAX_DRAWDOWN", "0.10")
+        monkeypatch.setenv("MAX_CONSECUTIVE_LOSSES", "4")
+        monkeypatch.setenv("DAILY_LOSS_CAP", "0.05")
+        monkeypatch.setenv("MAX_SLIPPAGE", "0.02")
+        monkeypatch.setenv("MAX_DRAWDOWN", "0.10")
+        monkeypatch.setenv("MAX_CONSECUTIVE_LOSSES", "4")
+        monkeypatch.setenv("DAILY_LOSS_CAP", "0.05")
+        monkeypatch.setenv("MAX_SLIPPAGE", "0.02")
         # Reload config + reset singletons that might have captured the old path
         import importlib
 
@@ -41,4 +53,12 @@ def _tmp_state_file(monkeypatch):
         import bot.risk as risk_mod
 
         risk_mod.RISK = None
+        # Budget profile is memoised per process; reset so the reloaded CFG
+        # takes effect.
+        try:
+            import bot.core.budget as budget_mod
+
+            budget_mod._PROFILE = None
+        except Exception:  # noqa: BLE001
+            pass
         yield state

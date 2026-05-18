@@ -52,7 +52,7 @@ def resolve_signer(*, paper: bool = False) -> Optional[Signer]:
     """Return the configured Signer, or None for paper/no-op.
 
     Paper mode never needs a real signer: the executor short-circuits
-    ``_execute_paper`` without touching py-clob-client. We still try
+    ``_execute_paper`` without touching py-clob-client-v2. We still try
     Tier 1 first so a paper run against real config surfaces wallet
     problems early.
     """

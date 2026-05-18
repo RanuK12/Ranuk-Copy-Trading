@@ -1,0 +1,35 @@
+# CONTEXTO ACTUAL DEL BOT DE COPY-TRADING EN POLYMARKET
+
+Claude, te necesito para solucionar un problema crítico estructural en el bot de copy-trading. El bot ya está corriendo en modo LIVE (producción) y ha ejecutado 4 operaciones reales mediante la estrategia `smart_copy`, invirtiendo $5 en cada una (Total: $20). 
+
+Sin embargo, el bot acaba de perder casi $10 en total (un 50% del capital invertido) en cuestión de minutos/horas. Las posiciones tomadas fueron:
+1. Cavaliers vs Pistons O/U (Entrada: 50¢ -> Ahora: 49.5¢)
+2. St. Louis Cardinals vs Athletics (Entrada: 15¢ -> Ahora: 10.5¢)
+3. Arizona Diamondbacks vs Texas Rangers (Entrada: 0.1¢ -> Ahora: 0.1¢)
+4. CS2: Liquid vs M80 (Entrada: 30¢ -> Ahora: 1.5¢) -> ¡Pérdida casi total aquí!
+
+## 🔴 EL PROBLEMA GRAVE
+1. **Falta de Lógica de Venta (Exit Strategy):** El bot actual *sólo sabe comprar*. Se basa en un modelo de "comprar y holdear hasta la resolución del mercado". No tiene ninguna función implementada para vender (sell) las acciones. Si el mercado se desploma (como pasó en el partido de CS2), el bot simplemente mira pasivamente cómo el valor se va a $0 sin ejecutar un Stop-Loss.
+2. **Desconexión con el Smart Wallet:** Si la wallet a la que estamos copiando decide vender su posición para cortar pérdidas o tomar ganancias, nuestro bot NO la copia. Se queda con la bolsa.
+3. **Filtros de Wallets Rotos:** Las posiciones que tomó fueron muy riesgosas (comprando a 0.1¢ o 15¢). Esto sucedió porque los filtros de `COPY_MIN_WIN_RATE` y `COPY_MIN_PROFIT_FACTOR` estaban en 0.0, permitiendo copiar a cualquier wallet del leaderboard sin verificar si realmente son rentables a largo plazo. De hecho, el módulo `WalletDiscovery` recientemente reportó "No wallet candidates passed filters", lo que indica que el sistema de puntuación no está encontrando buenas billeteras.
+
+## 🛠️ TU MISIÓN Y TAREAS A IMPLEMENTAR
+
+Necesito que escribas el código y refactorices lo necesario para implementar lo siguiente:
+
+### Fase 1: Auditoría y Diagnóstico
+- Revisa el archivo `bot_live.log` (o pide que te muestren fragmentos) para entender exactamente qué wallet activó estas compras y por qué pasaron los filtros de riesgo.
+- Revisa `bot/wallet_discovery.py` y `bot/strategies/smart_copy.py` para entender por qué estamos copiando wallets suicidas o de muy bajo win-rate. Necesitamos mejorar la forma en que el bot busca y puntúa billeteras rentables, priorizando aquellas que operan con márgenes consistentes y no apuestan a "loterías" de 0.1¢.
+
+### Fase 2: Implementación de Lógica de Venta (Stop-Loss / Take-Profit)
+- Debes implementar la capacidad de **VENDER (SELL)** en `bot/executor.py` y en la lógica de las estrategias.
+- Añade un monitor continuo de posiciones abiertas. El bot debe escanear el PNL en vivo de la cartera y ejecutar órdenes de venta si:
+  a) La posición cae más de un % determinado (Stop-Loss dinámico, ej. -25%).
+  b) La posición alcanza un Take-Profit razonable.
+  c) *Idealmente:* El bot detecta que la smart wallet original vendió su posición.
+
+### Fase 3: Integración del Cliente CLOB para Ventas
+- Asegúrate de que `bot/clients/polymarket.py` y el `py-clob-client-v2` soporten colocar órdenes de venta de manera robusta. 
+- Implementa un mecanismo de salida a mercado (Market Order o Limit agresivo) para asegurar que el Stop-Loss se ejecute y no se quede colgado en el orderbook.
+
+**Por favor, entrégame un plan de acción paso a paso y comienza dándome el código para implementar el Stop-Loss urgente en el Executor, para evitar que el bot siga perdiendo dinero en hold.**

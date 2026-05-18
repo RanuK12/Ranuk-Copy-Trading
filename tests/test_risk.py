@@ -110,6 +110,9 @@ def test_adjusted_size_cuts_micro_spread_to_25pct():
 
 def test_drawdown_halves_size():
     rm = RiskManager()
+    # Pin max_drawdown to 10% regardless of .env drift so this test checks
+    # the drawdown math, not the on-disk config.
+    object.__setattr__(CFG, "max_drawdown", 0.10)
     rm.state.current_equity = 890.0  # 11% below the $1000 peak
     assert rm._in_drawdown() is True
     # Base input $100 is clamped to the profile's $20, then halved -> $10.

@@ -1,0 +1,257 @@
+"""Budget profiles — tuning for low-capital accounts (e.g. $20-$30).
+
+Problem
+-------
+The v2 defaults assume $1000+ capital: $20 per trade, 5% per-market cap
+($50), 25% per-strategy cap ($250). If you feed it $30 of capital, the
+bot will either reject every trade (cap too small to fit a Polymarket
+minimum order) or blow the daily loss cap on a single bad fill.
+
+Solution
+--------
+Auto-classify the configured ``TOTAL_CAPITAL_USDC`` into a tier and
+compute sensible defaults per tier. Strategies that require more
+capital to be effective (market making, multi-leg arbitrage with the
+min order size on both sides) are pruned from ``recommended_strategies``
+for the smaller tiers.
+
+The profile is consulted by:
+
+* :class:`bot.risk.RiskManager`         — override sizing + exposure caps.
+* :class:`bot.monitoring.tui_app`       — shown in header / /budget.
+* :mod:`bot.strategies` loader in main  — prunes strategies not fit.
+"""
+
+from __future__ import annotations
+
+from dataclasses import dataclass, field
+from typing import Optional
+
+from bot.config import CFG
+
+
+# ---------------------------------------------------------------------------
+# Tier taxonomy
+# ---------------------------------------------------------------------------
+MICRO_MAX = 50.0       # <= $50 is "micro"
+SMALL_MAX = 300.0      # <= $300 is "small"
+STANDARD_MAX = 5_000.0 # <= $5k is "standard"
+
+
+@dataclass
+class BudgetProfile:
+    tier: str
+    capital_usdc: float
+    trade_size_usdc: float
+    max_per_market_usdc: float
+    max_per_strategy_usdc: float
+    daily_loss_cap_usdc: float
+    # Strategies listed here will be auto-enabled if the user hasn't
+    # explicitly overridden STRATEGIES_ENABLED.
+    recommended_strategies: list[str]
+    # Strategies listed here will be pruned even if the user enabled
+    # them (and the bot will log a warning on startup).
+    forbidden_strategies: list[str] = field(default_factory=list)
+    notes: list[str] = field(default_factory=list)
+
+    # ------------------------------------------------------------------
+    # Presentation
+    # ------------------------------------------------------------------
+    def describe(self) -> str:
+        header = f"💰 Budget profile: [{self.tier}]  capital=${self.capital_usdc:.2f}"
+        lines = [
+            header,
+            f"  Recommended per-trade size:  ${self.trade_size_usdc:.2f}",
+            f"  Max exposure per market:     ${self.max_per_market_usdc:.2f}",
+            f"  Max exposure per strategy:   ${self.max_per_strategy_usdc:.2f}",
+            f"  Daily loss cap:              ${self.daily_loss_cap_usdc:.2f}",
+            "",
+            "  Recommended strategies: " + (", ".join(self.recommended_strategies) or "-"),
+        ]
+        if self.forbidden_strategies:
+            lines.append(
+                "  Not advised at this tier: " + ", ".join(self.forbidden_strategies)
+            )
+        if self.notes:
+            lines.append("")
+            for note in self.notes:
+                lines.append(f"  • {note}")
+        return "\n".join(lines)
+
+
+# ---------------------------------------------------------------------------
+# Tier classification
+# ---------------------------------------------------------------------------
+def classify(capital: float) -> BudgetProfile:
+    """Return a :class:`BudgetProfile` sized for ``capital`` USDC."""
+    if capital <= MICRO_MAX:
+        return _micro_profile(capital)
+    if capital <= SMALL_MAX:
+        return _small_profile(capital)
+    if capital <= STANDARD_MAX:
+        return _standard_profile(capital)
+    return _large_profile(capital)
+
+
+def _micro_profile(capital: float) -> BudgetProfile:
+    """$0 - $50: tail-end only, tiny trade sizes, one-position-at-a-time.
+
+    With $20-$30 the bot cannot meaningfully hedge (market-making, sum-to-one
+    arbitrage both need 2 legs each >= Polymarket's ~$1 min notional) and
+    cannot absorb a single 50¢ loss under a realistic 5% daily cap. We
+    therefore restrict to tail-end trading only and force very small sizes.
+    """
+    # Trade size = 25% of capital, rounded to nearest $1, minimum $2.
+    # Polymarket's effective minimum FOK fill is ~$1; $2 gives us headroom.
+    size = max(2.0, round(capital * 0.25))
+    # Cap a single market at 40% of capital (tail-end is high-confidence)
+    max_market = max(size, round(capital * 0.40, 2))
+    # Strategy cap = whole capital (no need to subdivide further at this size)
+    max_strategy = round(capital, 2)
+    # Daily loss cap tighter: 10% instead of 5% because a single $2 loss on
+    # $20 is already 10%.
+    daily_cap = round(capital * 0.50, 2)
+    return BudgetProfile(
+        tier="micro",
+        capital_usdc=capital,
+        trade_size_usdc=size,
+        max_per_market_usdc=max_market,
+        max_per_strategy_usdc=max_strategy,
+        daily_loss_cap_usdc=daily_cap,
+        recommended_strategies=["tail_end"],
+        forbidden_strategies=[
+            "arbitrage",       # 2-leg FOK requires ~$2 per leg; infeasible
+            "market_making",   # 2-leg GTC + CTF merge needs more capital
+            "micro_spread",    # sizing cut to 25% of 25% is unusable
+            "dip_arb",         # hedge leg sizing too small to matter
+        ],
+        notes=[
+            "Budget too small for multi-leg strategies.",
+            f"Bot will place at most 1-2 positions of ~${size:.0f} at a time.",
+            "Expect 1-3 trades per day. Compound slowly; raise budget once "
+            "consistent PnL proves the wallet flow works.",
+            "For sniper strategy: orders at $0.01-$0.02 are cheap enough; "
+            "enable it manually via STRATEGIES_ENABLED=tail_end,sniper if "
+            "you want asymmetric exposure.",
+        ],
+    )
+
+
+def _small_profile(capital: float) -> BudgetProfile:
+    """$50 - $300: tail-end + smart-copy + sniper, single-leg focus."""
+    size = max(3.0, round(capital * 0.10))
+    max_market = round(capital * 0.15, 2)
+    max_strategy = round(capital * 0.40, 2)
+    daily_cap = round(capital * 0.07, 2)
+    return BudgetProfile(
+        tier="small",
+        capital_usdc=capital,
+        trade_size_usdc=size,
+        max_per_market_usdc=max_market,
+        max_per_strategy_usdc=max_strategy,
+        daily_loss_cap_usdc=daily_cap,
+        recommended_strategies=["tail_end", "smart_copy", "sniper"],
+        forbidden_strategies=[
+            "market_making",   # still needs more headroom to ride out one-sided cycles
+        ],
+        notes=[
+            "Multi-leg arbitrage allowed but opportunities will be rare at this size.",
+            "Keep a buffer for gas (~1-2 MATIC) on the signing EOA.",
+            f"Daily loss cap of ${daily_cap:.2f} triggers kill switch fast — monitor /pnl.",
+        ],
+    )
+
+
+def _standard_profile(capital: float) -> BudgetProfile:
+    """$300 - $5k: full multi-strategy set at v2 defaults."""
+    size = 20.0 if capital >= 500 else max(5.0, round(capital * 0.03))
+    return BudgetProfile(
+        tier="standard",
+        capital_usdc=capital,
+        trade_size_usdc=size,
+        max_per_market_usdc=round(capital * 0.05, 2),
+        max_per_strategy_usdc=round(capital * 0.25, 2),
+        daily_loss_cap_usdc=round(capital * 0.05, 2),
+        recommended_strategies=[
+            "arbitrage",
+            "tail_end",
+            "micro_spread",
+            "dip_arb",
+            "smart_copy",
+            "market_making",
+            "sniper",
+        ],
+        notes=[
+            "Full 7-strategy set is viable at this tier.",
+            "Start conservative: enable arbitrage + tail_end + smart_copy first.",
+        ],
+    )
+
+
+def _large_profile(capital: float) -> BudgetProfile:
+    """$5k+: same strategy set; encourage hardware wallet for custody."""
+    return BudgetProfile(
+        tier="large",
+        capital_usdc=capital,
+        trade_size_usdc=20.0,
+        max_per_market_usdc=round(capital * 0.03, 2),
+        max_per_strategy_usdc=round(capital * 0.20, 2),
+        daily_loss_cap_usdc=round(capital * 0.03, 2),
+        recommended_strategies=[
+            "arbitrage",
+            "tail_end",
+            "micro_spread",
+            "dip_arb",
+            "smart_copy",
+            "market_making",
+            "sniper",
+        ],
+        notes=[
+            "At this capital size, move to a hardware wallet for long-term "
+            "custody (see docs/WALLET_SECURITY.md) and consider Tier 3 "
+            "multi-wallet to separate hot (arbitrage) from cold (tail-end) "
+            "capital.",
+        ],
+    )
+
+
+# ---------------------------------------------------------------------------
+# Cached resolver
+# ---------------------------------------------------------------------------
+_PROFILE: Optional[BudgetProfile] = None
+
+
+def current_profile() -> BudgetProfile:
+    global _PROFILE
+    if _PROFILE is None:
+        _PROFILE = classify(CFG.total_capital_usdc)
+    return _PROFILE
+
+
+def refresh_profile(capital: Optional[float] = None) -> BudgetProfile:
+    """Recompute the profile — called when capital changes mid-run."""
+    global _PROFILE
+    _PROFILE = classify(capital if capital is not None else CFG.total_capital_usdc)
+    return _PROFILE
+
+
+# ---------------------------------------------------------------------------
+# Strategy filtering
+# ---------------------------------------------------------------------------
+def filter_strategies(requested: list[str]) -> tuple[list[str], list[str]]:
+    """Split requested strategies into (allowed, dropped) for the active profile.
+
+    ``dropped`` contains names that appear in the profile's ``forbidden_strategies``
+    list. Main.py logs a warning for each dropped name and continues with
+    ``allowed``.
+    """
+    p = current_profile()
+    forbidden = set(p.forbidden_strategies)
+    allowed: list[str] = []
+    dropped: list[str] = []
+    for name in requested:
+        if name in forbidden:
+            dropped.append(name)
+        else:
+            allowed.append(name)
+    return allowed, dropped

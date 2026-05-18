@@ -1,0 +1,109 @@
+# PROMPT: Rediseño Premium del Dashboard Web — Polymarket Bot
+
+## CONTEXTO
+Tengo un bot de trading para Polymarket con un dashboard web minimal en:
+```
+bot/web/static/dashboard.html   (202 líneas, HTML/CSS/JS monolítico)
+bot/web/server.py               (FastAPI + WebSocket, 175 líneas)
+```
+
+El dashboard actual es funcional pero feo — fuente monospace, cards con bordes grises, sin animaciones, sin personalidad. Quiero un **rediseño premium completo** que se vea como un dashboard de trading institucional (estilo Bloomberg Terminal meets Figma moderno).
+
+## STACK ACTUAL
+- **Backend:** FastAPI + uvicorn (NO CAMBIAR)
+- **WebSocket:** `/ws/dashboard` envía un JSON snapshot cada 1 segundo
+- **REST:** `/api/snapshot` para el primer render
+- **Frontend:** Un solo archivo `dashboard.html` con CSS y JS inline
+- **Charts:** Chart.js 4.4.0
+
+## DATOS QUE LLEGAN POR WEBSOCKET (JSON)
+```json
+{
+  "mode": "paper" | "live",
+  "ts": 1234567890.123,
+  "equity": 20.80,
+  "pnl_day": -0.50,
+  "pnl_month": 2.30,
+  "kill_switch": false,
+  "in_drawdown": false,
+  "queue_depth": 3,
+  "inflight": 1,
+  "scanner": {
+    "last_scan_age_s": 2,
+    "markets_tracked": 607,
+    "arb_candidates": 0,
+    "tail_end_candidates": 35,
+    "micro_spread_candidates": 0,
+    "crypto_15m": 16
+  },
+  "strategies": [
+    {"name": "tail_end", "trades": 12, "wins": 8, "losses": 4, "pnl": 1.50, "win_rate": 0.67, "profit_factor": 2.1},
+    {"name": "smart_copy", "trades": 5, "wins": 3, "losses": 2, "pnl": 0.80, "win_rate": 0.60, "profit_factor": 1.8},
+    {"name": "sniper", "trades": 0, "wins": 0, "losses": 0, "pnl": 0, "win_rate": 0, "profit_factor": 0}
+  ],
+  "equity_curve": [
+    {"ts": 1234567890, "equity": 0.50, "strategy": "tail_end"},
+    {"ts": 1234567900, "equity": 1.20, "strategy": "smart_copy"}
+  ],
+  "recent_fills": [
+    {"executed_at": 1234567890, "strategy": "tail_end", "market_id": "0xabc...", "status": "simulated", "pnl_usdc": 0.50, "reason": ""},
+    {"executed_at": 1234567880, "strategy": "smart_copy", "market_id": "0xdef...", "status": "filled", "pnl_usdc": -0.20, "reason": "slippage"}
+  ]
+}
+```
+
+## DISEÑO QUE QUIERO
+
+### Estética general
+- **Dark mode elegante** — fondo #0a0a0f o similar (no el gris GitHub de ahora)
+- **Glassmorphism sutil** en las cards (backdrop-blur, bordes translúcidos)
+- **Gradientes** en los KPIs principales (equity en verde degradado, pérdidas en rojo degradado)
+- **Tipografía moderna** — Google Font "Inter" para texto, "JetBrains Mono" para números
+- **Colores de marca:** accent primario cyan/teal (#00d4aa), danger red (#ff4444), warning amber (#ffb020)
+- **Micro-animaciones** — números que hacen count-up, cards que hacen fade-in, pulsos sutiles en datos live
+- **Grid responsive** — 2 columnas en desktop, 1 columna en mobile
+- **Sin scroll infinito** — todo debe caber en viewport (max 1 scroll)
+
+### Layout (de arriba a abajo)
+1. **Top Bar** — Logo/nombre del bot + pill mode (PAPER/LIVE) + reloj UTC + conexión status (dot verde pulsante)
+2. **KPI Row** — 5 cards grandes con glassmorphism:
+   - Equity ($20.80) con sparkline mini
+   - PnL Day (+$0.50) con color dinámico verde/rojo
+   - PnL Month (+$2.30)
+   - Queue depth (3) con animación de pulso si > 0
+   - Kill Switch (OFF/ON) con badge de color
+3. **Equity Chart** (Chart.js) — Área chart con gradiente, grid oscuro, tooltips premium, smooth
+4. **Strategies Table** — Card con tabla estilizada, barras de progreso para win%, badges de color por estado
+5. **Scanner Stats** — Card con donut chart o radial bars mostrando la distribución de mercados
+6. **Recent Fills** — Card con tabla scrollable con max 10 rows, status badges con colores, timestamps relativos ("2m ago")
+
+### Interactividad
+- **Hover effects** en todas las cards (sutil lift + glow)
+- **Status pill** que parpadea cuando está en LIVE
+- **Números que transicionan** con CSS transitions cuando cambian de valor
+- **Tooltips** en los KPIs explicando qué significan
+- **Auto-reconnect indicator** — si el WebSocket se desconecta, mostrar banner de "Reconectando..."
+
+### Detalles premium
+- Favicon custom (emoji 🤖 o icono de trading)
+- Title dinámico: "🤖 Bot — $20.80 | +$0.50" (muestra equity y PnL en la tab del browser)
+- Timestamp del último update visible (ej: "Updated 1s ago")
+- Animación de "no data" elegante si no hay fills aún
+
+## RESTRICCIONES
+1. **Un solo archivo HTML** — todo el CSS y JS debe seguir inline (no crear archivos separados)
+2. **NO usar frameworks** (no React, no Vue, no Tailwind) — solo vanilla CSS + JS
+3. **Mantener el mismo backend** — no modificar `server.py` ni la estructura del JSON
+4. **Chart.js CDN** — mantener chart.js 4.4.0 del CDN
+5. **Google Fonts CDN** — cargar Inter y JetBrains Mono desde CDN
+6. **Debe funcionar offline** una vez cargado (solo el WebSocket necesita conexión)
+7. **NO agregar dependencias npm** — es un archivo estático servido por FastAPI
+
+## ARCHIVO A REEMPLAZAR
+```
+bot/web/static/dashboard.html
+```
+Reemplazar completamente con el nuevo diseño. El backend (`server.py`) NO necesita cambios.
+
+## RESULTADO ESPERADO
+Un dashboard que cuando lo abra en el browser, me haga sentir que estoy usando un producto fintech de $100K/año — no un proyecto de hobby. Algo que da placer mirar mientras el bot opera.

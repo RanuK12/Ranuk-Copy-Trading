@@ -33,7 +33,7 @@ from bot.state import get_state
 log = get_logger("web")
 
 try:
-    from fastapi import FastAPI, WebSocket, WebSocketDisconnect  # type: ignore
+    from fastapi import FastAPI, WebSocket, WebSocketDisconnect, Response  # type: ignore
     from fastapi.responses import HTMLResponse  # type: ignore
     import uvicorn  # type: ignore
     _AVAILABLE = True
@@ -43,6 +43,21 @@ except Exception as e:  # noqa: BLE001
 
 
 _STATIC_DIR = Path(__file__).parent / "static"
+_LIVE_POSITIONS: list[dict[str, Any]] = []
+
+
+async def _poll_live_positions() -> None:
+    from bot.clients.polymarket import get_poly
+    poly = get_poly()
+    while True:
+        try:
+            if not CFG.is_paper and CFG.poly_funder:
+                positions = await asyncio.to_thread(poly.get_user_positions, CFG.poly_funder)
+                global _LIVE_POSITIONS
+                _LIVE_POSITIONS = positions or []
+        except Exception as e:
+            log.debug(f"Failed to fetch live positions: {e}")
+        await asyncio.sleep(30)
 
 
 def _snapshot_json(
@@ -84,6 +99,29 @@ def _snapshot_json(
             }
         )
 
+    # Internal bot positions (from state)
+    bot_positions = []
+    for strategy, positions in state.state.positions_by_strategy.items():
+        for pos in positions:
+            if not pos.get("open"):
+                continue
+            legs = pos.get("legs", [])
+            entry_price = None
+            token_id = None
+            if legs and "price" in legs[0]:
+                entry_price = legs[0].get("price")
+                token_id = legs[0].get("token_id", "")[:16]
+            bot_positions.append({
+                "strategy": strategy,
+                "market_id": pos.get("market_id", "")[:20],
+                "size_usdc": pos.get("size_usdc", 0),
+                "entry_price": entry_price,
+                "opened_at": pos.get("opened_at", 0),
+                "paper": pos.get("paper", False),
+                "sl_price": round(entry_price * (1 - CFG.stop_loss_pct), 4) if entry_price else None,
+                "tp_price": round(entry_price * (1 + CFG.take_profit_pct), 4) if entry_price else None,
+            })
+
     return {
         "mode": CFG.mode,
         "ts": time.time(),
@@ -105,6 +143,16 @@ def _snapshot_json(
         "strategies": per_strat,
         "equity_curve": equity_series,
         "recent_fills": state.recent_fills(limit=20),
+        "open_positions": _LIVE_POSITIONS,
+        "bot_positions": bot_positions,
+        "risk_config": {
+            "stop_loss_pct": CFG.stop_loss_pct,
+            "take_profit_pct": CFG.take_profit_pct,
+            "monitor_interval": CFG.position_monitor_interval,
+            "min_entry_price": CFG.copy_min_entry_price,
+        },
+        "smart_wallets_count": len(CFG.smart_wallets),
+        "wallet_address": CFG.poly_funder,
     }
 
 
@@ -119,11 +167,13 @@ def create_app(
     app = FastAPI(title="Polymarket Bot Dashboard")
 
     @app.get("/", response_class=HTMLResponse)
-    async def index() -> str:
+    async def index(response: Response) -> str:
+        response.headers["Cache-Control"] = "no-cache, no-store, must-revalidate, max-age=0"
         return (_STATIC_DIR / "dashboard.html").read_text(encoding="utf-8")
 
     @app.get("/api/snapshot")
-    async def snapshot_endpoint():
+    async def snapshot_endpoint(response: Response):
+        response.headers["Cache-Control"] = "no-cache, no-store, must-revalidate, max-age=0"
         return _snapshot_json(queue, scanner, executor)
 
     @app.websocket("/ws/dashboard")
@@ -166,4 +216,13 @@ async def run_server(
     config = uvicorn.Config(app, host=host, port=port, log_level="warning")
     server = uvicorn.Server(config)
     log.info(f"[green]Web dashboard:[/] http://{host}:{port}")
-    await server.serve()
+    try:
+        task = asyncio.create_task(_poll_live_positions())
+        await server.serve()
+    except SystemExit as e:
+        log.warning(f"Web dashboard exited (code={e.code}); bot continues.")
+    except Exception as e:  # noqa: BLE001
+        log.warning(f"Web dashboard crashed: {e}; bot continues.")
+    finally:
+        if 'task' in locals():
+            task.cancel()

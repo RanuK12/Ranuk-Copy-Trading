@@ -97,7 +97,7 @@ proxy (funder) address.
   * `1` — email / Magic wallet (default for most users)
   * `2` — browser-wallet proxy
 
-The `py-clob-client` derives or creates API credentials on first run via
+The `py-clob-client-v2` derives or creates API credentials on first run via
 `create_or_derive_api_creds()`; you do not have to manually set a
 `POLY_API_KEY` unless you already have one.
 

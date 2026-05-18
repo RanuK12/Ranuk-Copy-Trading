@@ -5,7 +5,7 @@ Consumes :class:`~bot.models.Opportunity` items from the
 :class:`~bot.risk.RiskManager`, then either:
 
 * **paper mode** — prints a ``[SIMULADO]`` line, records a synthetic fill.
-* **live  mode** — submits real orders through ``py-clob-client``.
+* **live  mode** — submits real orders through ``py-clob-client-v2``.
 
 Slippage guard: for single-leg opportunities with ``reference_price`` and
 ``max_slippage`` set, the executor re-fetches the live price immediately
@@ -78,8 +78,9 @@ class Executor:
             await self._record(opp, status="skipped", reason=reason)
             return
 
-        # 2. Duplicate guard (per strategy + market)
-        if self._state.has_open_position(opp.strategy, opp.market_id):
+        # 2. Duplicate guard (per strategy + market) — only for BUYs
+        is_sell = any(leg.side is Side.SELL for leg in opp.legs)
+        if not is_sell and self._state.has_open_position(opp.strategy, opp.market_id):
             log.info(f"{tag} -> [yellow]duplicate:[/] already positioned.")
             await self._record(opp, status="skipped", reason="duplicate")
             return
@@ -109,6 +110,27 @@ class Executor:
                     )
                     return
 
+        # 3b. Liquidity gate — refuse to enter a book where exiting would
+        # be impossible. Only apply to single-leg BUYs (multi-leg arbitrage
+        # already has its own depth logic upstream).
+        if len(opp.legs) == 1 and opp.legs[0].side is Side.BUY:
+            from bot.intelligence import orderbook_has_liquidity
+            leg = opp.legs[0]
+            book = await self._poly.get_order_book_async(leg.token_id)
+            ok, liq_reason = orderbook_has_liquidity(
+                book,
+                desired_size_usdc=leg.size_usdc,
+                side="BUY",
+                max_spread=CFG.liquidity_max_spread,
+                min_depth_multiplier=CFG.liquidity_min_depth_multiplier,
+            )
+            if not ok:
+                log.info(f"{tag} -> [yellow]illiquid:[/] {liq_reason}")
+                await self._record(
+                    opp, status="skipped", reason=f"illiquid:{liq_reason}"
+                )
+                return
+
         # 4. Reserve exposure up-front (released on failure)
         size_total = sum(leg.size_usdc for leg in opp.legs)
         self._risk.reserve_exposure(opp.strategy, opp.market_id, size_total)
@@ -128,16 +150,15 @@ class Executor:
     # Paper trading
     # ------------------------------------------------------------------
     async def _execute_paper(self, opp: Opportunity) -> None:
-        # Theoretical fill price == the reference price the strategy emitted,
-        # or the current best ask if unspecified.
+        # Paper PnL uses the strategy's expected edge rather than mark-to-market
+        # live prices.  Mark-to-market creates false losses when the ask dips
+        # below our entry — the real PnL only materialises at resolution.
         fills_detail: list[dict[str, Any]] = []
         theoretical_pnl = 0.0
         for leg in opp.legs:
             px = leg.limit_price or opp.reference_price
             if px is None:
                 px = await self._poly.get_price_async(leg.token_id, leg.side.value) or 0.0
-            # Fetch current live price for more realistic PnL estimate
-            live_px = await self._poly.get_price_async(leg.token_id, leg.side.value)
             fills_detail.append(
                 {
                     "token_id": leg.token_id,
@@ -145,21 +166,13 @@ class Executor:
                     "size_usdc": leg.size_usdc,
                     "kind": leg.kind.value,
                     "price": px,
-                    "live_price": live_px,
                 }
             )
             if leg.side is Side.BUY:
-                shares = leg.size_usdc / px if px > 0 else 0
-                if live_px is not None and live_px > 0:
-                    # Use actual market price difference for more realistic P&L
-                    theoretical_pnl += shares * (live_px - px)
-                    # If live price equals entry (common for immediate fill),
-                    # fall back to expected edge estimate
-                    if abs(live_px - px) < 1e-6:
-                        theoretical_pnl += shares * px * opp.expected_profit_pct
-                else:
-                    # Fallback to theoretical estimate
-                    theoretical_pnl += shares * px * opp.expected_profit_pct
+                # Conservative paper PnL: expected edge × size × 0.5
+                # This avoids the mark-to-market illusion while still
+                # rewarding high-confidence opportunities.
+                theoretical_pnl += leg.size_usdc * opp.expected_profit_pct * 0.5
 
         log.info(
             f"[cyan][SIMULADO][/] Estrategia: {opp.strategy} | "
@@ -210,12 +223,19 @@ class Executor:
 
         if all_ok:
             log.info(f"{self._tag(opp)} -> [green]ORDER POSTED[/] legs={ok_count}")
-            self._state.open_position(
-                opp.strategy,
-                opp.market_id,
-                sum(leg.size_usdc for leg in opp.legs),
-                extra=details,
-            )
+            is_sell = any(leg.side is Side.SELL for leg in opp.legs)
+            if is_sell:
+                self._state.close_position(opp.strategy, opp.market_id, 0.0)
+                self._risk.release_exposure(
+                    opp.strategy, opp.market_id, sum(leg.size_usdc for leg in opp.legs)
+                )
+            else:
+                self._state.open_position(
+                    opp.strategy,
+                    opp.market_id,
+                    sum(leg.size_usdc for leg in opp.legs),
+                    extra=details,
+                )
             await self._record(opp, status="filled", details=details)
         else:
             # For multi-leg opportunities, partial fill is dangerous
@@ -230,56 +250,76 @@ class Executor:
                     self._risk.release_exposure(
                         opp.strategy, opp.market_id, leg.size_usdc
                     )
+            # Log each failing leg so we know *why* it failed (size, price, etc.)
+            for leg, r in zip(opp.legs, results):
+                if isinstance(r, dict) and not r.get("success"):
+                    log.warning(
+                        f"{self._tag(opp)} -> leg failed: {r.get('error')}"
+                    )
             await self._record(
-                opp, status="failed", reason="partial_fill", details=details
+                opp, status="rejected", reason="partial_fill", details=details
             )
             await self._tg.send(
-                f"⚠️ Partial fill: {opp.strategy} / {opp.market_slug}\n"
-                f"Filled {ok_count}/{len(opp.legs)} legs. Please review positions."
+                f"⚠️ Order rejected: {opp.strategy} / {opp.market_slug}\n"
+                f"Filled {ok_count}/{len(opp.legs)} legs."
             )
 
     async def _send_leg(self, opp: Opportunity, leg: Leg) -> dict[str, Any]:
-        """Send a single CLOB order. Returns a dict with success/response."""
+        """Send a single CLOB order. Returns a dict with success/response.
+
+        Uses market orders (FOK) exclusively — py-clob-client-v2 limit-order
+        amount rounding is incompatible with the V2 server validation for
+        certain tick sizes.  Market orders route through
+        ``get_market_order_amounts`` which produces the correct decimal
+        precision.
+        """
         try:
-            from py_clob_client.clob_types import (  # type: ignore
+            from py_clob_client_v2.clob_types import (  # type: ignore
                 MarketOrderArgs,
-                OrderArgs,
                 OrderType,
             )
-            from py_clob_client.order_builder.constants import BUY, SELL  # type: ignore
         except Exception as e:  # noqa: BLE001
-            return {"success": False, "error": f"py-clob-client unavailable: {e}"}
+            return {"success": False, "error": f"py-clob-client-v2 unavailable: {e}"}
 
         client = self._poly.clob()
         if client is None:
             return {"success": False, "error": "CLOB client not initialized"}
 
-        side_const = BUY if leg.side is Side.BUY else SELL
+        side_str = "BUY" if leg.side is Side.BUY else "SELL"
         try:
-            if leg.kind is OrderKind.FOK:
-                args = MarketOrderArgs(
-                    token_id=leg.token_id,
-                    amount=float(leg.size_usdc),
-                    side=side_const,
-                    order_type=OrderType.FOK,
-                )
-                signed = await asyncio.to_thread(client.create_market_order, args)
-                resp = await asyncio.to_thread(client.post_order, signed, OrderType.FOK)
-            else:  # LIMIT or GTC
-                assert leg.limit_price is not None, "limit_price required"
-                size_shares = leg.size_usdc / max(leg.limit_price, 1e-6)
-                args = OrderArgs(
-                    token_id=leg.token_id,
-                    price=float(leg.limit_price),
-                    size=float(round(size_shares, 4)),
-                    side=side_const,
-                )
-                signed = await asyncio.to_thread(client.create_order, args)
-                order_type = OrderType.GTC if leg.kind is OrderKind.GTC else OrderType.FOK
-                resp = await asyncio.to_thread(client.post_order, signed, order_type)
+            # Market orders: BUY -> amount in USDC, SELL -> amount in shares
+            if leg.side is Side.BUY:
+                amount = float(leg.size_usdc)
+            else:
+                px = max(leg.limit_price or opp.reference_price or 1e-6, 1e-6)
+                amount = float(round(leg.size_usdc / px, 2))
+
+            args = MarketOrderArgs(
+                token_id=leg.token_id,
+                amount=amount,
+                side=side_str,
+                order_type=OrderType.FOK,
+            )
+            resp = await asyncio.to_thread(
+                client.create_and_post_market_order, args, order_type=OrderType.FOK
+            )
             return {"success": True, "response": resp}
         except Exception as e:  # noqa: BLE001
-            return {"success": False, "error": str(e)}
+            err_msg = str(e)
+            if hasattr(e, "message"):
+                err_msg = f"{err_msg} | msg={getattr(e, 'message')}"
+            if hasattr(e, "response"):
+                resp = getattr(e, "response")
+                if resp is not None:
+                    try:
+                        err_msg = f"{err_msg} | body={resp.text}"
+                    except Exception:  # noqa: BLE001
+                        pass
+            log.warning(
+                f"[red]CLOB order failed[/] token={leg.token_id[:16]}... "
+                f"side={leg.side.value} size={leg.size_usdc:.2f} price={leg.limit_price} -> {err_msg}"
+            )
+            return {"success": False, "error": err_msg}
 
     # ------------------------------------------------------------------
     # Shared: record outcome + alert
@@ -313,6 +353,10 @@ class Executor:
             )
         elif status == "failed":
             self._risk.register_api_error()
+        elif status == "rejected":
+            # Business-level rejections (min size, closed market, etc.)
+            # do NOT count against the API error streak.
+            pass
 
     # ------------------------------------------------------------------
     def _tag(self, opp: Opportunity) -> str:

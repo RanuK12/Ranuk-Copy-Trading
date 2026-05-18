@@ -5,7 +5,7 @@ Combines three upstream APIs:
 * Gamma API — market discovery (active markets, slug, clobTokenIds).
 * Data API  — public user trades / activity (smart-money wallets).
 * CLOB API  — orderbook, prices, and authenticated order placement via
-  ``py-clob-client``.
+  ``py-clob-client-v2``.
 
 A shared ``requests.Session`` is used for connection pooling, and a simple
 token-bucket rate limiter caps outbound requests at ``POLY_RATE_LIMIT_PER_MIN``.
@@ -80,6 +80,11 @@ class PolymarketClient:
 
     def __init__(self) -> None:
         self._session = requests.Session()
+        adapter = requests.adapters.HTTPAdapter(
+            pool_connections=20, pool_maxsize=80
+        )
+        self._session.mount("https://", adapter)
+        self._session.mount("http://", adapter)
         self._session.headers.update({"Accept": "application/json"})
         self._limiter = _RateLimiter(CFG.poly_rate_limit_per_min)
         self._clob: Any = None  # Lazily initialized (live mode only)
@@ -106,10 +111,20 @@ class PolymarketClient:
     # Gamma — market discovery
     # ------------------------------------------------------------------
     def fetch_active_markets(self, limit: int = 500) -> list[PolyMarket]:
-        """Return active, non-closed binary markets with token IDs populated."""
+        """Return active, non-closed binary markets with token IDs populated.
+
+        Ordered by ``volume24hr`` descending so the most liquid markets are
+        included even when the API caps the response at 500 rows.
+        """
         markets_raw = self._get(
             f"{CFG.gamma_api_host}/markets",
-            {"active": "true", "closed": "false", "limit": limit},
+            {
+                "active": "true",
+                "closed": "false",
+                "limit": limit,
+                "order": "volume24hr",
+                "ascending": "false",
+            },
         )
         out: list[PolyMarket] = []
         for m in markets_raw or []:
@@ -136,6 +151,49 @@ class PolymarketClient:
                 )
             except Exception as e:  # noqa: BLE001
                 log.debug(f"Skipping malformed market {m.get('conditionId')}: {e}")
+        return out
+
+    def fetch_sports_markets(self, limit: int = 200) -> list[PolyMarket]:
+        """Return active sports markets (short-term games) via Gamma tag_id=100639.
+
+        Ordered by ``volume24hr`` descending so the hottest games come first.
+        """
+        markets_raw = self._get(
+            f"{CFG.gamma_api_host}/markets",
+            {
+                "active": "true",
+                "closed": "false",
+                "limit": limit,
+                "tag_id": "100639",
+                "order": "volume24hr",
+                "ascending": "false",
+            },
+        )
+        out: list[PolyMarket] = []
+        for m in markets_raw or []:
+            try:
+                token_ids = m.get("clobTokenIds")
+                if isinstance(token_ids, str):
+                    token_ids = json.loads(token_ids)
+                if not token_ids or len(token_ids) < 2:
+                    continue
+                out.append(
+                    PolyMarket(
+                        condition_id=m["conditionId"],
+                        slug=m.get("slug", ""),
+                        question=m.get("question", ""),
+                        yes_token_id=str(token_ids[0]),
+                        no_token_id=str(token_ids[1]),
+                        volume_usdc=float(m.get("volume", 0) or 0),
+                        end_date=m.get("endDate"),
+                        active=bool(m.get("active", True)),
+                        closed=bool(m.get("closed", False)),
+                        negative_risk=bool(m.get("negRisk", False)),
+                        raw=m,
+                    )
+                )
+            except Exception as e:  # noqa: BLE001
+                log.debug(f"Skipping malformed sports market {m.get('conditionId')}: {e}")
         return out
 
     # ------------------------------------------------------------------
@@ -202,7 +260,76 @@ class PolymarketClient:
             return []
 
     # ------------------------------------------------------------------
-    # CLOB authenticated client (py-clob-client) — live mode only
+    # Balance / portfolio value (CLOB + data-api hybrid)
+    # ------------------------------------------------------------------
+    def get_usdc_available(self, wallet: str) -> Optional[float]:
+        """Return the USDC balance available to place orders, via the CLOB client.
+
+        Falls back to ``None`` if the CLOB client isn't initialised or the
+        balance endpoint is unreachable. Uses USDC collateral balance.
+        """
+        try:
+            client = self.clob()
+            if client is None:
+                return None
+            # py-clob-client-v2: BalanceAllowanceParams with collateral asset type
+            try:
+                from py_clob_client_v2.clob_types import (  # type: ignore
+                    BalanceAllowanceParams,
+                    AssetType,
+                )
+
+                params = BalanceAllowanceParams(
+                    asset_type=AssetType.COLLATERAL,
+                    token_id="",
+                    signature_type=CFG.poly_signature_type,
+                )
+                resp = client.get_balance_allowance(params)
+                # Balance is returned as integer USDC (6 decimals).
+                bal_raw = resp.get("balance") if isinstance(resp, dict) else None
+                if bal_raw is None:
+                    return None
+                return float(bal_raw) / 1_000_000.0
+            except Exception as e:  # noqa: BLE001
+                log.debug(f"get_usdc_available CLOB call failed: {e}")
+                return None
+        except Exception as e:  # noqa: BLE001
+            log.debug(f"get_usdc_available top-level failed: {e}")
+            return None
+
+    def get_positions_value(self, wallet: str) -> float:
+        """Sum of size * curPrice across the wallet's open positions."""
+        try:
+            val = self._get(
+                f"{CFG.data_api_host}/value",
+                {"user": wallet},
+            )
+            if isinstance(val, list) and val:
+                return float(val[0].get("value") or 0)
+        except Exception as e:  # noqa: BLE001
+            log.debug(f"positions_value failed: {e}")
+        # Fallback: iterate positions endpoint.
+        try:
+            total = 0.0
+            for p in self.get_user_positions(wallet):
+                total += float(p.get("size") or 0) * float(p.get("curPrice") or 0)
+            return total
+        except Exception:  # noqa: BLE001
+            return 0.0
+
+    def get_portfolio_value(self, wallet: str) -> Optional[float]:
+        """Total portfolio value = available USDC + value of open positions.
+
+        Returns ``None`` if neither number could be resolved.
+        """
+        usdc = self.get_usdc_available(wallet)
+        pos = self.get_positions_value(wallet)
+        if usdc is None and pos == 0:
+            return None
+        return (usdc or 0.0) + pos
+
+    # ------------------------------------------------------------------
+    # CLOB authenticated client (py-clob-client-v2) — live mode only
     # ------------------------------------------------------------------
     def clob(self):  # type: ignore[no-untyped-def]
         if self._clob is not None:
@@ -214,19 +341,61 @@ class PolymarketClient:
                 "POLY_PRIVATE_KEY + POLY_FUNDER are required for live trading."
             )
 
-        from py_clob_client.client import ClobClient  # type: ignore
+        from py_clob_client_v2 import ClobClient, ApiCreds  # type: ignore
+        from py_clob_client_v2.order_utils import SignatureTypeV2  # type: ignore
+
+        from bot.clients.clob_v2_auth import get_or_create_credentials  # type: ignore
+
+        creds_dict = get_or_create_credentials(
+            CFG.poly_private_key, host=CFG.clob_host
+        )
+        creds = ApiCreds(
+            api_key=creds_dict["api_key"],
+            api_secret=creds_dict["api_secret"],
+            api_passphrase=creds_dict["api_passphrase"],
+        )
 
         client = ClobClient(
-            CFG.clob_host,
-            key=CFG.poly_private_key,
+            host=CFG.clob_host,
             chain_id=137,
-            signature_type=CFG.poly_signature_type,
+            key=CFG.poly_private_key,
+            signature_type=SignatureTypeV2.POLY_1271,
             funder=CFG.poly_funder,
+            creds=creds,
         )
-        client.set_api_creds(client.create_or_derive_api_creds())
-        log.info("[green]CLOB client authenticated.[/]")
+        log.info("[green]CLOB V2 client authenticated.[/]")
         self._clob = client
         return client
+
+    # ------------------------------------------------------------------
+    # Sell — market order to exit a position
+    # ------------------------------------------------------------------
+    def sell_position(self, token_id: str, shares: float) -> dict[str, Any]:
+        """Place a FOK market sell order for the given shares amount."""
+        try:
+            from py_clob_client_v2.clob_types import MarketOrderArgs, OrderType  # type: ignore
+        except Exception as e:
+            return {"success": False, "error": f"py-clob-client-v2 unavailable: {e}"}
+
+        client = self.clob()
+        if client is None:
+            return {"success": False, "error": "CLOB client not initialized"}
+
+        try:
+            args = MarketOrderArgs(
+                token_id=token_id,
+                amount=float(round(shares, 2)),
+                side="SELL",
+                order_type=OrderType.FOK,
+            )
+            resp = client.create_and_post_market_order(args, order_type=OrderType.FOK)
+            return {"success": True, "response": resp}
+        except Exception as e:
+            log.warning(f"[red]SELL order failed[/] token={token_id[:16]}... shares={shares:.2f} -> {e}")
+            return {"success": False, "error": str(e)}
+
+    async def sell_position_async(self, token_id: str, shares: float) -> dict[str, Any]:
+        return await asyncio.to_thread(self.sell_position, token_id, shares)
 
     # Simple async wrappers (delegate to threads so we don't block the loop)
     async def get_price_async(self, token_id: str, side: str = "BUY") -> Optional[float]:
@@ -237,6 +406,9 @@ class PolymarketClient:
 
     async def fetch_active_markets_async(self, limit: int = 500) -> list[PolyMarket]:
         return await asyncio.to_thread(self.fetch_active_markets, limit)
+
+    async def fetch_sports_markets_async(self, limit: int = 200) -> list[PolyMarket]:
+        return await asyncio.to_thread(self.fetch_sports_markets, limit)
 
     async def get_user_trades_async(
         self, wallet: str, limit: int = 20

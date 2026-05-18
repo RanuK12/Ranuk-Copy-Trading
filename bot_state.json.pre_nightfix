@@ -1,0 +1,844 @@
+{
+  "positions_by_strategy": {
+    "smart_copy": [
+      {
+        "market_id": "0x6b44bd667fad6cb5b3b68d8bd1055a038c77d9176dbd51f123879797cc3368a7",
+        "size_usdc": 5.0,
+        "open": false,
+        "opened_at": 1778640281.903209,
+        "legs": [
+          {
+            "token_id": "87330689906224096887625709229706923472442188571057301299963059101866409440363",
+            "side": "BUY",
+            "size_usdc": 5.0,
+            "kind": "LIMIT",
+            "price": 0.9802
+          }
+        ],
+        "paper": true,
+        "expected_profit_pct": 0.05,
+        "closed_at": 1778645092.5088189,
+        "pnl_usdc": -0.03162619873495196
+      },
+      {
+        "market_id": "0xe202539dfbeced92dc4112f134a205c80ca6cf4db32bd82f05b291c297219fd8",
+        "size_usdc": 5.0,
+        "open": false,
+        "opened_at": 1778640282.19405,
+        "legs": [
+          {
+            "token_id": "17229559412398170618704225341353811929634795955092110836823940954753499964583",
+            "side": "BUY",
+            "size_usdc": 5.0,
+            "kind": "LIMIT",
+            "price": 0.9659
+          }
+        ],
+        "paper": true,
+        "expected_profit_pct": 0.05,
+        "closed_at": 1778645092.728273,
+        "pnl_usdc": -0.01501190599440943
+      },
+      {
+        "market_id": "0xb6b3d7a2037b3faa7e1306d741840d453432902d73cc9a146a035e40271eae73",
+        "size_usdc": 5.0,
+        "open": false,
+        "opened_at": 1778640282.416149,
+        "legs": [
+          {
+            "token_id": "12636035070565821048178968461063687179393834041535317885287743395873720755118",
+            "side": "BUY",
+            "size_usdc": 5.0,
+            "kind": "LIMIT",
+            "price": 0.8629
+          }
+        ],
+        "paper": true,
+        "expected_profit_pct": 0.05,
+        "closed_at": 1778645093.030915,
+        "pnl_usdc": -0.3644686522192604
+      },
+      {
+        "market_id": "0x713641f745d71f6ec61f906237ffca3c8583f251e49384429a63ceb0ccdb2d37",
+        "size_usdc": 5.0,
+        "open": false,
+        "opened_at": 1778640282.712762,
+        "legs": [
+          {
+            "token_id": "1770840559776249239623005379825945674336282130390798724203946923853499387834",
+            "side": "BUY",
+            "size_usdc": 5.0,
+            "kind": "LIMIT",
+            "price": 0.9221
+          }
+        ],
+        "paper": true,
+        "expected_profit_pct": 0.05,
+        "closed_at": 1778645093.245375,
+        "pnl_usdc": -0.31504175252141875
+      },
+      {
+        "market_id": "0x6d0fdf65491a8b5edbd1f34c9714f7abec8ce00f5959c42bd8bb3cd82ea07749",
+        "size_usdc": 5.0,
+        "open": false,
+        "opened_at": 1778643631.7081542,
+        "legs": [
+          {
+            "success": true,
+            "response": {
+              "errorMsg": "",
+              "orderID": "0xf8d0c5e1cbc7ab4b568c06cb14bb56555be4a515a3bee4be1953e9e4950994ea",
+              "takingAmount": "",
+              "makingAmount": "",
+              "status": "delayed",
+              "success": true
+            }
+          }
+        ],
+        "ok_count": 1,
+        "leg_count": 1,
+        "closed_at": 1778645093.245964,
+        "pnl_usdc": 0.0
+      },
+      {
+        "market_id": "0x24f6c018549b00d279a3516c6e530cb4542681d82d7c4be085ae7190552e20a0",
+        "size_usdc": 5.0,
+        "open": false,
+        "opened_at": 1778643643.4876,
+        "legs": [
+          {
+            "success": true,
+            "response": {
+              "errorMsg": "",
+              "orderID": "0xd2c4e7a242f7db0b1d044fea94299c37ace751098514665be778f198bdc164ae",
+              "takingAmount": "",
+              "makingAmount": "",
+              "status": "delayed",
+              "success": true
+            }
+          }
+        ],
+        "ok_count": 1,
+        "leg_count": 1,
+        "closed_at": 1778645093.246339,
+        "pnl_usdc": 0.0
+      },
+      {
+        "market_id": "0x2d1864c4cc78c13bae19c349d122021ccb551ecd612db4acbb81f1f64f8e3c0d",
+        "size_usdc": 5.0,
+        "open": false,
+        "opened_at": 1778643648.192123,
+        "legs": [
+          {
+            "success": true,
+            "response": {
+              "errorMsg": "",
+              "orderID": "0xd37cd44990661bb40e458dfc377de690430736852cbc385ad2351e117fe53e42",
+              "takingAmount": "",
+              "makingAmount": "",
+              "status": "delayed",
+              "success": true
+            }
+          }
+        ],
+        "ok_count": 1,
+        "leg_count": 1,
+        "closed_at": 1778645093.24668,
+        "pnl_usdc": 0.0
+      },
+      {
+        "market_id": "0xa880c424854d4d7be4e71a2f2e5c50f3e7d78c6bbcd62903010fc48d244e9939",
+        "size_usdc": 5.0,
+        "open": true,
+        "opened_at": 1778643652.678828,
+        "legs": [
+          {
+            "success": true,
+            "response": {
+              "errorMsg": "",
+              "orderID": "0x7a473b6b13d3b70346aac824de885ef6130c568836023aa8b35b05b1bf5af6f3",
+              "takingAmount": "10",
+              "makingAmount": "5",
+              "status": "matched",
+              "transactionsHashes": [
+                "0xbe5773c147adb5ca03392a977e8812b23167277fb1bce59f16a1e4e5b1296a9d"
+              ],
+              "success": true
+            }
+          }
+        ],
+        "ok_count": 1,
+        "leg_count": 1
+      },
+      {
+        "market_id": "0x2d1864c4cc78c13bae19c349d122021ccb551ecd612db4acbb81f1f64f8e3c0d",
+        "size_usdc": 1.0,
+        "open": true,
+        "opened_at": 1778647541.634971,
+        "legs": [
+          {
+            "success": true,
+            "response": {
+              "errorMsg": "",
+              "orderID": "0x8de536d46a9084d378b27dde34e6b86c1a30326bdb6c15713a94bf6aa414811b",
+              "takingAmount": "",
+              "makingAmount": "",
+              "status": "delayed",
+              "success": true
+            }
+          }
+        ],
+        "ok_count": 1,
+        "leg_count": 1
+      },
+      {
+        "market_id": "0x6d0fdf65491a8b5edbd1f34c9714f7abec8ce00f5959c42bd8bb3cd82ea07749",
+        "size_usdc": 1.0,
+        "open": true,
+        "opened_at": 1778647544.2236218,
+        "legs": [
+          {
+            "success": true,
+            "response": {
+              "errorMsg": "",
+              "orderID": "0x487156e945dfc1c126f80b2203d5300db6d0c8b5045d760fe19ddb69458fddb7",
+              "takingAmount": "",
+              "makingAmount": "",
+              "status": "delayed",
+              "success": true
+            }
+          }
+        ],
+        "ok_count": 1,
+        "leg_count": 1
+      },
+      {
+        "market_id": "0xb232f60f61ae33f5d0311e778c8d7114dbdcce5e5d0ead96bd1f226328b9a2c6",
+        "size_usdc": 1.0,
+        "open": true,
+        "opened_at": 1778647567.075017,
+        "legs": [
+          {
+            "success": true,
+            "response": {
+              "errorMsg": "",
+              "orderID": "0xabfb96fc4682d6300d6fde296f35e2610237761de826f5e3dc9843c4708584b6",
+              "takingAmount": "",
+              "makingAmount": "",
+              "status": "delayed",
+              "success": true
+            }
+          }
+        ],
+        "ok_count": 1,
+        "leg_count": 1
+      }
+    ]
+  },
+  "last_seen_tx": {
+    "0x492442eab586f242b53bda933fd5de859c8a3782": "0x20f2980f3552316e906a2f07c3d720c307a2c84ea1991005867ad642d8a407fe",
+    "0x6a72f61820b26b1fe4d956e17b6dc2a1ea3033ee": "0x78a6edf3fa5d011b9e2e64cbd1c78a40d52e1b1e851134b689c52fa79cdf26b7",
+    "0x9495425feeb0c250accb89275c97587011b19a27": "0xb39822426b9294cdb2b00c8cd1a1c379e923e6ff1931467d876a319b7db3130a",
+    "0xa5ea13a81d2b7e8e424b182bdc1db08e756bd96a": "0xdb0982daac59038d9d870b86408ea19b62a5a234d05f1e3f94edacb9ff9216c8",
+    "0xd106952ebf30a3125affd8a23b6c1f30c35fc79c": "0x6913a957a0745b65a195e9d875a4a445700f19d19581a7f4bce68e97cb6b8524",
+    "0x14026373da58fabe45e2bf73a915a5d4b3a6e35b": "0x747756b98a95fcb2342976f83fcae46e897c6f60bf696ff19d5d43d0ea858a36",
+    "0xd81e5bc01e4a98d0af93d82dc2c542a4c0f9e3d0": "0xcae49ed20c4108692d2417c461b0d6c162163240abd4b6cac2f55e704608e6b2",
+    "0x2a2c53bd278c04da9962fcf96490e17f3dfb9bc1": "0xe76890cb6ea4ee41566da46b106cb40c192182e31dba438c4b7876d14eecf36d",
+    "0xbd14b65383c15e0b0f64944ca000f9a2bc5dd62a": "0x205477a40267803f2e65617dc166c08c7ec63f79f2f803e701a3dd8036d898b7",
+    "0x93abbc022ce98d6f45d4444b594791cc4b7a9723": "0xa0f72bbd8e68279b0cecefcc19879dc33ff9dbad749805f2872c7c64c2773941",
+    "0x2663daca3cecf3767ca1c3b126002a8578a8ed1f": "0x1dfecd064e73c59b0f7311155961b5575331f9a24592afe51b91bd4d00f909d9"
+  },
+  "stats": {
+    "smart_copy": {
+      "trades": 11,
+      "wins": 11,
+      "losses": 0,
+      "pnl_usdc": 0.5
+    }
+  },
+  "paper_fills": [
+    {
+      "opportunity_id": "a39c6d4f28b2",
+      "strategy": "smart_copy",
+      "market_id": "0x6b44bd667fad6cb5b3b68d8bd1055a038c77d9176dbd51f123879797cc3368a7",
+      "status": "simulated",
+      "pnl_usdc": 0.125,
+      "reason": "",
+      "tx_hashes": [],
+      "executed_at": 1778640281.9056342,
+      "details": {
+        "legs": [
+          {
+            "token_id": "87330689906224096887625709229706923472442188571057301299963059101866409440363",
+            "side": "BUY",
+            "size_usdc": 5.0,
+            "kind": "LIMIT",
+            "price": 0.9802
+          }
+        ],
+        "size_usdc": 5.0
+      }
+    },
+    {
+      "opportunity_id": "42d35ac6b1a8",
+      "strategy": "smart_copy",
+      "market_id": "0xe202539dfbeced92dc4112f134a205c80ca6cf4db32bd82f05b291c297219fd8",
+      "status": "simulated",
+      "pnl_usdc": 0.125,
+      "reason": "",
+      "tx_hashes": [],
+      "executed_at": 1778640282.195319,
+      "details": {
+        "legs": [
+          {
+            "token_id": "17229559412398170618704225341353811929634795955092110836823940954753499964583",
+            "side": "BUY",
+            "size_usdc": 5.0,
+            "kind": "LIMIT",
+            "price": 0.9659
+          }
+        ],
+        "size_usdc": 5.0
+      }
+    },
+    {
+      "opportunity_id": "5cb668746ed9",
+      "strategy": "smart_copy",
+      "market_id": "0xb6b3d7a2037b3faa7e1306d741840d453432902d73cc9a146a035e40271eae73",
+      "status": "simulated",
+      "pnl_usdc": 0.125,
+      "reason": "",
+      "tx_hashes": [],
+      "executed_at": 1778640282.417535,
+      "details": {
+        "legs": [
+          {
+            "token_id": "12636035070565821048178968461063687179393834041535317885287743395873720755118",
+            "side": "BUY",
+            "size_usdc": 5.0,
+            "kind": "LIMIT",
+            "price": 0.8629
+          }
+        ],
+        "size_usdc": 5.0
+      }
+    },
+    {
+      "opportunity_id": "c65cab832d88",
+      "strategy": "smart_copy",
+      "market_id": "0x713641f745d71f6ec61f906237ffca3c8583f251e49384429a63ceb0ccdb2d37",
+      "status": "simulated",
+      "pnl_usdc": 0.125,
+      "reason": "",
+      "tx_hashes": [],
+      "executed_at": 1778640282.714096,
+      "details": {
+        "legs": [
+          {
+            "token_id": "1770840559776249239623005379825945674336282130390798724203946923853499387834",
+            "side": "BUY",
+            "size_usdc": 5.0,
+            "kind": "LIMIT",
+            "price": 0.9221
+          }
+        ],
+        "size_usdc": 5.0
+      }
+    },
+    {
+      "opportunity_id": "5f79e85b1502",
+      "strategy": "smart_copy",
+      "market_id": "0x22e7b5e35423e76842dd3a5e1a21d13793811080d5e7b2896d0c001bd5e97d54",
+      "status": "skipped",
+      "pnl_usdc": 0.0,
+      "reason": "strategy_exposure_cap",
+      "tx_hashes": [],
+      "executed_at": 1778640282.716175,
+      "details": {}
+    }
+  ],
+  "recent_fills": [
+    {
+      "opportunity_id": "322b64389485",
+      "strategy": "smart_copy",
+      "market_id": "0x6b1301edcaec80a9e670da289db71ccc59bbd916de1eccddb5404a6b0577fe52",
+      "status": "rejected",
+      "pnl_usdc": 0.0,
+      "reason": "partial_fill",
+      "tx_hashes": [],
+      "executed_at": 1778648009.780854,
+      "details": {
+        "legs": [
+          {
+            "success": false,
+            "error": "PolyApiException[status_code=400, error_message={'error': \"order couldn't be fully filled. FOK orders are fully filled or killed.\", 'orderID': '0x487a3f54d0bf9e8c1cf7cf372546bf859e8cf5bd74d14222d085aea60fb71607'}]"
+          }
+        ],
+        "ok_count": 0,
+        "leg_count": 1
+      }
+    },
+    {
+      "opportunity_id": "7c6798fcc39d",
+      "strategy": "smart_copy",
+      "market_id": "0xb232f60f61ae33f5d0311e778c8d7114dbdcce5e5d0ead96bd1f226328b9a2c6",
+      "status": "filled",
+      "pnl_usdc": 0.0,
+      "reason": "",
+      "tx_hashes": [],
+      "executed_at": 1778647567.075594,
+      "details": {
+        "legs": [
+          {
+            "success": true,
+            "response": {
+              "errorMsg": "",
+              "orderID": "0xabfb96fc4682d6300d6fde296f35e2610237761de826f5e3dc9843c4708584b6",
+              "takingAmount": "",
+              "makingAmount": "",
+              "status": "delayed",
+              "success": true
+            }
+          }
+        ],
+        "ok_count": 1,
+        "leg_count": 1
+      }
+    },
+    {
+      "opportunity_id": "601da6c121e2",
+      "strategy": "smart_copy",
+      "market_id": "0x571fa709d492b70b4d6d126fc8e153e799e756f2629778363ab461a7d5949c24",
+      "status": "skipped",
+      "pnl_usdc": 0.0,
+      "reason": "no_price",
+      "tx_hashes": [],
+      "executed_at": 1778647547.339288,
+      "details": {}
+    },
+    {
+      "opportunity_id": "ea74d65d9557",
+      "strategy": "smart_copy",
+      "market_id": "0x6d0fdf65491a8b5edbd1f34c9714f7abec8ce00f5959c42bd8bb3cd82ea07749",
+      "status": "filled",
+      "pnl_usdc": 0.0,
+      "reason": "",
+      "tx_hashes": [],
+      "executed_at": 1778647544.225012,
+      "details": {
+        "legs": [
+          {
+            "success": true,
+            "response": {
+              "errorMsg": "",
+              "orderID": "0x487156e945dfc1c126f80b2203d5300db6d0c8b5045d760fe19ddb69458fddb7",
+              "takingAmount": "",
+              "makingAmount": "",
+              "status": "delayed",
+              "success": true
+            }
+          }
+        ],
+        "ok_count": 1,
+        "leg_count": 1
+      }
+    },
+    {
+      "opportunity_id": "736764970230",
+      "strategy": "smart_copy",
+      "market_id": "0x2d1864c4cc78c13bae19c349d122021ccb551ecd612db4acbb81f1f64f8e3c0d",
+      "status": "filled",
+      "pnl_usdc": 0.0,
+      "reason": "",
+      "tx_hashes": [],
+      "executed_at": 1778647541.635592,
+      "details": {
+        "legs": [
+          {
+            "success": true,
+            "response": {
+              "errorMsg": "",
+              "orderID": "0x8de536d46a9084d378b27dde34e6b86c1a30326bdb6c15713a94bf6aa414811b",
+              "takingAmount": "",
+              "makingAmount": "",
+              "status": "delayed",
+              "success": true
+            }
+          }
+        ],
+        "ok_count": 1,
+        "leg_count": 1
+      }
+    },
+    {
+      "opportunity_id": "b2200f29e80a",
+      "strategy": "smart_copy",
+      "market_id": "0xb4847d170b036dced8186bf45322c234c3429c4f7a805769598bdcea7f959d86",
+      "status": "skipped",
+      "pnl_usdc": 0.0,
+      "reason": "no_price",
+      "tx_hashes": [],
+      "executed_at": 1778647537.4139159,
+      "details": {}
+    },
+    {
+      "opportunity_id": "d0f7dc2804b5",
+      "strategy": "smart_copy",
+      "market_id": "0x2ee7d631788a616a601a192ae9444b17ac0fe72b2c0dfa8d5ff8ff5daf404205",
+      "status": "skipped",
+      "pnl_usdc": 0.0,
+      "reason": "no_price",
+      "tx_hashes": [],
+      "executed_at": 1778647515.870892,
+      "details": {}
+    },
+    {
+      "opportunity_id": "4df76101957f",
+      "strategy": "smart_copy",
+      "market_id": "0x5602006d117a173a52f629d51bf3e0a4b6df8fbd7ea7125342a717957b310cfc",
+      "status": "skipped",
+      "pnl_usdc": 0.0,
+      "reason": "no_price",
+      "tx_hashes": [],
+      "executed_at": 1778647505.390254,
+      "details": {}
+    },
+    {
+      "opportunity_id": "d40db06d9191",
+      "strategy": "smart_copy",
+      "market_id": "0xf853252a28594900a3f602e182e9070afa1ae7c9920709f414189dd1dfb76135",
+      "status": "skipped",
+      "pnl_usdc": 0.0,
+      "reason": "no_price",
+      "tx_hashes": [],
+      "executed_at": 1778647502.033483,
+      "details": {}
+    },
+    {
+      "opportunity_id": "ce698285603e",
+      "strategy": "smart_copy",
+      "market_id": "0x034370b7768a14882cc7203c5c41d64e7e4e8e89a20a9a08ab68f620c7c3fcff",
+      "status": "skipped",
+      "pnl_usdc": 0.0,
+      "reason": "no_price",
+      "tx_hashes": [],
+      "executed_at": 1778647478.969103,
+      "details": {}
+    },
+    {
+      "opportunity_id": "3dece9915b98",
+      "strategy": "smart_copy",
+      "market_id": "0x227a9e44c4a49b119c97352df5138b97ef1c191209c393bf3417f086555c924d",
+      "status": "skipped",
+      "pnl_usdc": 0.0,
+      "reason": "no_price",
+      "tx_hashes": [],
+      "executed_at": 1778647476.5506592,
+      "details": {}
+    },
+    {
+      "opportunity_id": "6b4649b7762d",
+      "strategy": "smart_copy",
+      "market_id": "0x94925153d4ee1cf28ea905df8f37fffb52ea32ea7c758b84088510593671e698",
+      "status": "rejected",
+      "pnl_usdc": 0.0,
+      "reason": "partial_fill",
+      "tx_hashes": [],
+      "executed_at": 1778645473.755457,
+      "details": {
+        "legs": [
+          {
+            "success": false,
+            "error": "PolyApiException[status_code=400, error_message={'error': 'not enough balance / allowance: the balance is not enough -> balance: 342672, order amount: 5091490'}]"
+          }
+        ],
+        "ok_count": 0,
+        "leg_count": 1
+      }
+    },
+    {
+      "opportunity_id": "00fec9d0ef14",
+      "strategy": "smart_copy",
+      "market_id": "0xd27e05e84e87e684518618e45e9509ae478af52abea387b11acdf6dc94720727",
+      "status": "rejected",
+      "pnl_usdc": 0.0,
+      "reason": "partial_fill",
+      "tx_hashes": [],
+      "executed_at": 1778645458.200473,
+      "details": {
+        "legs": [
+          {
+            "success": false,
+            "error": "PolyApiException[status_code=400, error_message={'error': 'not enough balance / allowance: the balance is not enough -> balance: 342672, order amount: 5075000'}]"
+          }
+        ],
+        "ok_count": 0,
+        "leg_count": 1
+      }
+    },
+    {
+      "opportunity_id": "b9f4afdc9794",
+      "strategy": "smart_copy",
+      "market_id": "0xb232f60f61ae33f5d0311e778c8d7114dbdcce5e5d0ead96bd1f226328b9a2c6",
+      "status": "rejected",
+      "pnl_usdc": 0.0,
+      "reason": "partial_fill",
+      "tx_hashes": [],
+      "executed_at": 1778645456.897275,
+      "details": {
+        "legs": [
+          {
+            "success": false,
+            "error": "PolyApiException[status_code=400, error_message={'error': 'not enough balance / allowance: the balance is not enough -> balance: 342672, order amount: 5140990'}]"
+          }
+        ],
+        "ok_count": 0,
+        "leg_count": 1
+      }
+    },
+    {
+      "opportunity_id": "69e1bb069c9b",
+      "strategy": "smart_copy",
+      "market_id": "0x6d0fdf65491a8b5edbd1f34c9714f7abec8ce00f5959c42bd8bb3cd82ea07749",
+      "status": "rejected",
+      "pnl_usdc": 0.0,
+      "reason": "partial_fill",
+      "tx_hashes": [],
+      "executed_at": 1778645455.61042,
+      "details": {
+        "legs": [
+          {
+            "success": false,
+            "error": "PolyApiException[status_code=400, error_message={'error': 'not enough balance / allowance: the balance is not enough -> balance: 342672, order amount: 5136490'}]"
+          }
+        ],
+        "ok_count": 0,
+        "leg_count": 1
+      }
+    },
+    {
+      "opportunity_id": "847059ce13e9",
+      "strategy": "smart_copy",
+      "market_id": "0xa880c424854d4d7be4e71a2f2e5c50f3e7d78c6bbcd62903010fc48d244e9939",
+      "status": "filled",
+      "pnl_usdc": 0.0,
+      "reason": "",
+      "tx_hashes": [],
+      "executed_at": 1778643652.679894,
+      "details": {
+        "legs": [
+          {
+            "success": true,
+            "response": {
+              "errorMsg": "",
+              "orderID": "0x7a473b6b13d3b70346aac824de885ef6130c568836023aa8b35b05b1bf5af6f3",
+              "takingAmount": "10",
+              "makingAmount": "5",
+              "status": "matched",
+              "transactionsHashes": [
+                "0xbe5773c147adb5ca03392a977e8812b23167277fb1bce59f16a1e4e5b1296a9d"
+              ],
+              "success": true
+            }
+          }
+        ],
+        "ok_count": 1,
+        "leg_count": 1
+      }
+    },
+    {
+      "opportunity_id": "b9b780373d49",
+      "strategy": "smart_copy",
+      "market_id": "0x2d1864c4cc78c13bae19c349d122021ccb551ecd612db4acbb81f1f64f8e3c0d",
+      "status": "filled",
+      "pnl_usdc": 0.0,
+      "reason": "",
+      "tx_hashes": [],
+      "executed_at": 1778643648.1931908,
+      "details": {
+        "legs": [
+          {
+            "success": true,
+            "response": {
+              "errorMsg": "",
+              "orderID": "0xd37cd44990661bb40e458dfc377de690430736852cbc385ad2351e117fe53e42",
+              "takingAmount": "",
+              "makingAmount": "",
+              "status": "delayed",
+              "success": true
+            }
+          }
+        ],
+        "ok_count": 1,
+        "leg_count": 1
+      }
+    },
+    {
+      "opportunity_id": "0c46d3160ed6",
+      "strategy": "smart_copy",
+      "market_id": "0xa7731641cb4549fae787ea638813b92e44789eea3f4b1991813980bd603fd684",
+      "status": "skipped",
+      "pnl_usdc": 0.0,
+      "reason": "slippage_exceeded",
+      "tx_hashes": [],
+      "executed_at": 1778643646.391254,
+      "details": {
+        "live_price": 0.999,
+        "cap": 0.4896
+      }
+    },
+    {
+      "opportunity_id": "6ca622b570d5",
+      "strategy": "smart_copy",
+      "market_id": "0x24f6c018549b00d279a3516c6e530cb4542681d82d7c4be085ae7190552e20a0",
+      "status": "filled",
+      "pnl_usdc": 0.0,
+      "reason": "",
+      "tx_hashes": [],
+      "executed_at": 1778643643.488467,
+      "details": {
+        "legs": [
+          {
+            "success": true,
+            "response": {
+              "errorMsg": "",
+              "orderID": "0xd2c4e7a242f7db0b1d044fea94299c37ace751098514665be778f198bdc164ae",
+              "takingAmount": "",
+              "makingAmount": "",
+              "status": "delayed",
+              "success": true
+            }
+          }
+        ],
+        "ok_count": 1,
+        "leg_count": 1
+      }
+    },
+    {
+      "opportunity_id": "86f194f95f5b",
+      "strategy": "smart_copy",
+      "market_id": "0x6d0fdf65491a8b5edbd1f34c9714f7abec8ce00f5959c42bd8bb3cd82ea07749",
+      "status": "filled",
+      "pnl_usdc": 0.0,
+      "reason": "",
+      "tx_hashes": [],
+      "executed_at": 1778643631.710389,
+      "details": {
+        "legs": [
+          {
+            "success": true,
+            "response": {
+              "errorMsg": "",
+              "orderID": "0xf8d0c5e1cbc7ab4b568c06cb14bb56555be4a515a3bee4be1953e9e4950994ea",
+              "takingAmount": "",
+              "makingAmount": "",
+              "status": "delayed",
+              "success": true
+            }
+          }
+        ],
+        "ok_count": 1,
+        "leg_count": 1
+      }
+    },
+    {
+      "opportunity_id": "5f79e85b1502",
+      "strategy": "smart_copy",
+      "market_id": "0x22e7b5e35423e76842dd3a5e1a21d13793811080d5e7b2896d0c001bd5e97d54",
+      "status": "skipped",
+      "pnl_usdc": 0.0,
+      "reason": "strategy_exposure_cap",
+      "tx_hashes": [],
+      "executed_at": 1778640282.716175,
+      "details": {}
+    },
+    {
+      "opportunity_id": "c65cab832d88",
+      "strategy": "smart_copy",
+      "market_id": "0x713641f745d71f6ec61f906237ffca3c8583f251e49384429a63ceb0ccdb2d37",
+      "status": "simulated",
+      "pnl_usdc": 0.125,
+      "reason": "",
+      "tx_hashes": [],
+      "executed_at": 1778640282.714096,
+      "details": {
+        "legs": [
+          {
+            "token_id": "1770840559776249239623005379825945674336282130390798724203946923853499387834",
+            "side": "BUY",
+            "size_usdc": 5.0,
+            "kind": "LIMIT",
+            "price": 0.9221
+          }
+        ],
+        "size_usdc": 5.0
+      }
+    },
+    {
+      "opportunity_id": "5cb668746ed9",
+      "strategy": "smart_copy",
+      "market_id": "0xb6b3d7a2037b3faa7e1306d741840d453432902d73cc9a146a035e40271eae73",
+      "status": "simulated",
+      "pnl_usdc": 0.125,
+      "reason": "",
+      "tx_hashes": [],
+      "executed_at": 1778640282.417535,
+      "details": {
+        "legs": [
+          {
+            "token_id": "12636035070565821048178968461063687179393834041535317885287743395873720755118",
+            "side": "BUY",
+            "size_usdc": 5.0,
+            "kind": "LIMIT",
+            "price": 0.8629
+          }
+        ],
+        "size_usdc": 5.0
+      }
+    },
+    {
+      "opportunity_id": "42d35ac6b1a8",
+      "strategy": "smart_copy",
+      "market_id": "0xe202539dfbeced92dc4112f134a205c80ca6cf4db32bd82f05b291c297219fd8",
+      "status": "simulated",
+      "pnl_usdc": 0.125,
+      "reason": "",
+      "tx_hashes": [],
+      "executed_at": 1778640282.195319,
+      "details": {
+        "legs": [
+          {
+            "token_id": "17229559412398170618704225341353811929634795955092110836823940954753499964583",
+            "side": "BUY",
+            "size_usdc": 5.0,
+            "kind": "LIMIT",
+            "price": 0.9659
+          }
+        ],
+        "size_usdc": 5.0
+      }
+    },
+    {
+      "opportunity_id": "a39c6d4f28b2",
+      "strategy": "smart_copy",
+      "market_id": "0x6b44bd667fad6cb5b3b68d8bd1055a038c77d9176dbd51f123879797cc3368a7",
+      "status": "simulated",
+      "pnl_usdc": 0.125,
+      "reason": "",
+      "tx_hashes": [],
+      "executed_at": 1778640281.9056342,
+      "details": {
+        "legs": [
+          {
+            "token_id": "87330689906224096887625709229706923472442188571057301299963059101866409440363",
+            "side": "BUY",
+            "size_usdc": 5.0,
+            "kind": "LIMIT",
+            "price": 0.9802
+          }
+        ],
+        "size_usdc": 5.0
+      }
+    }
+  ]
+}

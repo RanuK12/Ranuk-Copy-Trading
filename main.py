@@ -39,6 +39,8 @@ from bot.scanner import MarketScanner, get_scanner
 from bot.state import get_state
 from bot.strategies import REGISTRY as STRATEGY_REGISTRY
 from bot.strategies.base import Strategy
+from bot.wallet_discovery import WalletDiscovery
+from bot.position_monitor import PositionMonitor
 
 log = get_logger("main")
 
@@ -104,11 +106,15 @@ async def strategy_loop(
             continue
         last_generated_at = snap.generated_at
         try:
-            opps: Iterable[Opportunity] = await strategy.generate(snap) or []
+            opps: list[Opportunity] = list(await strategy.generate(snap) or [])
         except Exception as e:  # noqa: BLE001
             log.exception(f"{strategy.name}.generate crashed: {e}")
             await asyncio.sleep(CFG.scan_interval)
             continue
+        if opps:
+            log.info(
+                f"[magenta]{strategy.name}[/] generated {len(opps)} opp(s)"
+            )
         for opp in opps:
             await queue.push(opp)
 
@@ -250,6 +256,17 @@ async def run_bot(args: argparse.Namespace) -> int:
         tasks.append(
             asyncio.create_task(strategy_loop(strat, scanner, queue), name=f"strat.{strat.name}")
         )
+
+    # Wallet auto-discovery (runs in background, updates smart wallets every 12h)
+    if "smart_copy" in enabled_strategies:
+        tasks.append(
+            asyncio.create_task(WalletDiscovery().run_forever(), name="wallet_discovery")
+        )
+
+    # Position monitor — enforces SL/TP on all open positions
+    tasks.append(
+        asyncio.create_task(PositionMonitor().run_forever(), name="position_monitor")
+    )
 
     # --- Dashboard(s) -------------------------------------------------
     flavour = args.dashboard.lower()
