@@ -241,3 +241,8 @@ Architecture and API patterns informed by:
 * [Polymarket docs](https://docs.polymarket.com), especially the
   [CLOB quickstart](https://docs.polymarket.com/trading/quickstart) and
   [WebSocket overview](https://docs.polymarket.com/market-data/websocket/overview).
+
+
+## Licencia
+
+MIT — © 2026 Ranuk IT Solutions | [ranuk.dev](https://ranuk.dev)
