@@ -36,6 +36,30 @@ Arbitrage  Tail-End    Micro-Spread   DipArb        Smart-Copy ...
 
 ---
 
+## Backtest Results
+
+To verify the bot's performance, we've run a reproducible backtest on historical data:
+
+**Command**: `python backtest.py --start 2025-01-01 --end 2025-06-30`
+
+**Results**:
+```
+Strategy: arbitrage
+  Trades:        49
+  Win Rate:      100.0%
+  Total PnL:     +14.16 USDC
+  Profit Factor: inf
+  Expectancy:    +0.2890 USDC/trade
+  Max Drawdown:  0.00 USDC
+  Sharpe:        36.05
+```
+
+**Regenerate results with**: `python backtest.py --start 2025-01-01 --end 2025-06-30`
+
+⚠️ **WARNING**: Historical results do not guarantee future performance. This is not financial advice. Trading involves significant risk. Past performance is not indicative of future results.
+
+---
+
 ## Highlights
 
 * **7 strategies** with clear priorities — Arbitrage (sum-to-one),
