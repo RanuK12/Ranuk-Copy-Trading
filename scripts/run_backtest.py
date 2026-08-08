@@ -213,4 +213,4 @@ def run_diparb_backtest(
     # ──────────────────────────────────────────────────────────────────────
     total_return_pct = (capital - initial_capital) / initial_capital * 100
     total_trades = len(trades)
-    winning_trades = [t for t
+    winning_trades = [t
