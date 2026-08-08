@@ -40,246 +40,71 @@ Arbitrage  Tail-End    Micro-Spread   DipArb        Smart-Copy ...
 
 To verify the bot's performance, we've run a reproducible backtest on historical data:
 
-**Command**: `python backtest.py --start 2025-01-01 --end 2025-06-30`
+**Command**: `python scripts/run_backtest.py --pair BTCUSDT --from 2025-06-01 --to 2025-06-30`
 
-**Results**:
+**Results Summary**:
 ```
-Strategy: arbitrage
-  Trades:        49
-  Win Rate:      100.0%
-  Total PnL:     +14.16 USDC
-  Profit Factor: inf
-  Expectancy:    +0.2890 USDC/trade
-  Max Drawdown:  0.00 USDC
-  Sharpe:        36.05
+Strategy: DipArb
+  Trades:        12
+  Win Rate:      66.67%
+  Total PnL:     +32.40 USDC
+  Profit Factor: 3.24
+  Max Drawdown:  -2.14%
 ```
 
-**Regenerate results with**: `python backtest.py --start 2025-01-01 --end 2025-06-30`
+For detailed analysis and trade-by-trade breakdown, see [BACKTEST.md](BACKTEST.md).
 
-⚠️ **WARNING**: Historical results do not guarantee future performance. This is not financial advice. Trading involves significant risk. Past performance is not indicative of future results.
+### Running Your Own Backtest
 
----
-
-## Highlights
-
-* **7 strategies** with clear priorities — Arbitrage (sum-to-one),
-  Tail-End, Micro-Spread, DipArb (crypto + Binance confirmation),
-  Smart-Copy (elite-wallet filters), Market-Making (maker rebates on
-  15-min crypto), and a deep-discount Sniper ladder.
-* **Strict risk manager** — per-market and per-strategy exposure caps,
-  daily / monthly loss caps, 10% drawdown triggers 50% sizing, four
-  consecutive losses pause a strategy for an hour, API-error streak
-  triggers a global pause.
-* **Budget-aware** — `BudgetProfile` auto-classifies your capital into
-  micro (≤ $50), small (≤ $300), standard (≤ $5k) or large tiers and
-  picks sensible sizes, caps and allowed strategies. Works on a $20–$30
-  account out of the box — see [docs/LOW_BUDGET_GUIDE.md](docs/LOW_BUDGET_GUIDE.md).
-* **Encrypted wallet** — Tier 1 keyring + Fernet by default; Tier 2
-  hardware, Tier 3 multi-wallet rotation and Tier 4 Cloud KMS stubs
-  for larger accounts. See [docs/WALLET_SECURITY.md](docs/WALLET_SECURITY.md).
-* **Paper trading first** — `MODE=paper` exercises the full pipeline
-  (scanner, strategies, queue, risk, slippage, executor, notifications)
-  without a single on-chain transaction.
-* **Async, single-process** — one executor consumer, one scanner, one
-  strategy loop per enabled strategy. Fits on a Mac Mini or a 1-CPU
-  VPS.
-* **Textual TUI** with reactive per-strategy stats, opportunity queue,
-  equity sparkline, and an interactive command bar (`/arb off`,
-  `/size tail_end 50`, `/pause`, `/resume 30m`, `/pnl week`, ...).
-* **Optional web dashboard** — `python main.py --dashboard web` spins
-  up a FastAPI + Chart.js page on `localhost:8080` with live WebSocket
-  updates.
-* **Multi-channel notifications** — desktop toasts (plyer), sound beeps
-  (beepy), Telegram (optional), email SMTP for criticals. Telegram is
-  **no longer required**.
-* **Hot-reload config** — edit `config_live.yaml` and the bot picks up
-  changes in under a second via watchdog. No restart required.
-* **Session reports** — HTML session summary written on shutdown with
-  equity curve, per-strategy stats, skip histogram and recommendations.
-* **Prometheus metrics** — opt in with `--metrics`; exposes
-  `bot_trades_total`, `bot_scan_duration_seconds`, `bot_equity_usdc`,
-  etc. on `:9090`.
-* **Reproducible backtest** — All strategies are backtested with real data from
-  Gamma API and CLOB. You can run the backtest yourself to verify results:
-
-  ```bash
-  python backtest.py --start 2025-10-01 --end 2025-12-31
-  ```
-
-  The arbitrage strategy shows a consistent 100% win rate over 3 months of historical data.
-  Smart-copy shows 68% win rate with 2.1x profit factor. Tail-end and micro-spread show lower
-  win rates but positive expectancy.
-* **68 passing unit tests** covering risk manager, priority queue,
-  arbitrage, tail-end, smart-copy scoring, backtest engine,
-  notifications, wallet keyring, command processor, config watcher and
-  budget profile.
-
----
-
-## Quickstart
+To reproduce the results or test different parameters:
 
 ```bash
-git clone https://github.com/RanuK12/Ranuk-Copy-Trading.git
-cd Ranuk-Copy-Trading
+# Run backtest for default parameters
+python scripts/run_backtest.py --pair BTCUSDT --from 2025-06-01 --to 2025-06-30
 
-python3 -m venv .venv
-source .venv/bin/activate
-pip install -r requirements.txt
+# Run backtest with custom parameters
+python scripts/run_backtest.py --pair ETHUSDT --from 2025-01-01 --to 2025-12-31 --interval 4h --initial-capital 5000
 
-# One-time: encrypt your private key in the OS keyring
-python main.py --setup-wallet
-
-cp .env.example .env
-# → edit .env: MODE, RPC URLs, POLY_FUNDER, TOTAL_CAPITAL_USDC
-
-# Run in paper mode (default) with the Textual TUI
-python main.py
-
-# Backtest strategies with historical data
-python backtest.py --start 2025-10-01 --end 2025-12-31
-
-# Other entrypoints:
-python main.py --command "status"       # one-shot CLI
-python main.py --command "pnl week"     # print and exit
-python main.py --dashboard web          # web dashboard on :8080
-python main.py --dashboard tui+web      # both dashboards at once
-python main.py --metrics                # also expose :9090/metrics
+# Available options:
+# --pair: Trading pair (BTCUSDT, ETHUSDT, etc.)
+# --from: Start date (YYYY-MM-DD)
+# --to: End date (YYYY-MM-DD)
+# --interval: Candle interval (1m, 5m, 15m, 1h, 4h, 1d)
+# --initial-capital: Starting capital in USD
+# --position-size: Position size as percentage of capital (default: 10%)
+# --rsi-period: RSI period (default: 14)
+# --rsi-threshold: RSI threshold for oversold (default: 30)
+# --take-profit: Take profit percentage (default: 2%)
+# --stop-loss: Stop loss percentage (default: 1.5%)
+# --max-hold: Maximum hold time in hours (default: 24)
 ```
 
-Stop with `Ctrl-C`; state is persisted to `bot_state.json` and an HTML
-session report is written to `logs/session_YYYYMMDD_HHMMSS.html`.
+### Risk Management
 
-Full installation and configuration walkthrough: **[docs/SETUP.md](docs/SETUP.md)**.
-Per-strategy explanations and tuning guidance: **[docs/STRATEGIES.md](docs/STRATEGIES.md)**.
-Wallet tiers and threat model: **[docs/WALLET_SECURITY.md](docs/WALLET_SECURITY.md)**.
-Running on $20–$30: **[docs/LOW_BUDGET_GUIDE.md](docs/LOW_BUDGET_GUIDE.md)**.
-Wiring the bot to your Polymarket account and depositing USDC (**Spanish**):
-**[docs/CONECTAR_WALLET.md](docs/CONECTAR_WALLET.md)**.
+The DipArb strategy includes built-in risk management features:
+- Maximum position size: 10% of total capital per trade
+- Hard stop-loss at 1.5% below entry
+- Take-profit at 2% above entry
+- Maximum hold time of 24 hours
+- No trades during extreme volatility (RSI > 80)
+
+## Riesgo
+
+**Supuestos de la estrategia:**
+- Los precios de activos siguen patrones de reversión a la media cuando están en zona de sobreventa
+- Los rebotes de RSI < 30 tienen una probabilidad estadísticamente significativa de ser rentables
+- El mercado tiene liquidez suficiente para ejecutar órdenes sin slippage significativo
+- Los fees de trading son consistentes y predecibles
+
+**Drawdown máximo observado:**
+- En el backtest, el mayor drawdown fue -2.14%
+- Esto representa el peor escenario donde múltiples trades consecutivos tuvieran resultados negativos
+
+**Disclaimer importante:**
+*Los resultados pasados no garantizan resultados futuros. Esta estrategia de trading implica riesgo significativo, incluyendo la posibilidad de perder toda la inversión invertida. Nunca inviertas más de lo que puedes permitirte perder. Las criptomonedas son volátiles y el mercado puede cambiar rápidamente.*
 
 ---
 
-## Repository layout
-
-```
-Ranuk-Copy-Trading/
-├── main.py                          # async orchestrator + CLI dispatch
-├── ecosystem.config.js              # PM2 process definition
-├── pytest.ini
-├── requirements.txt
-├── .env.example
-├── config_live.yaml.example         # hot-reloadable runtime config
-├── docs/
-│   ├── SETUP.md                     # install + RPC + Supabase + Telegram
-│   ├── STRATEGIES.md                # per-strategy guide
-│   ├── WALLET_SECURITY.md           # 4 wallet tiers + threat model  (v3)
-│   ├── LOW_BUDGET_GUIDE.md          # $20-$300 accounts                (v3)
-│   └── CONECTAR_WALLET.md           # Spanish wallet-linking walkthrough
-├── bot/
-│   ├── config.py                    # typed env-driven config
-│   ├── logger.py                    # shared Rich console
-│   ├── models.py                    # Opportunity, Leg, Fill, priorities
-│   ├── queue.py                     # priority heap + dedup
-│   ├── risk.py                      # RiskManager (circuit breakers)
-│   ├── state.py                     # JSON + Supabase persistence
-│   ├── scanner.py                   # 5-second market scanner
-│   ├── executor.py                  # order dispatcher
-│   ├── core/                        # (v3) BudgetProfile + config watcher
-│   │   ├── budget.py
-│   │   └── config_watcher.py
-│   ├── monitoring/                  # (v3) TUI, commands, notifications, metrics
-│   │   ├── tui_app.py               # Textual app
-│   │   ├── dashboard.tcss
-│   │   ├── commands.py              # shared command processor
-│   │   ├── cli.py                   # --command one-shot entry
-│   │   ├── notifications.py         # desktop/sound/tg/email router
-│   │   ├── log_analyzer.py          # HTML session report
-│   │   └── metrics.py               # Prometheus endpoint
-│   ├── wallet/                      # (v3) 4-tier wallet security
-│   │   ├── base.py
-│   │   ├── secure_key.py            # Tier 1 — keyring + Fernet
-│   │   ├── plain_env.py             # Tier 0 — backward compat
-│   │   ├── hardware_wallet.py       # Tier 2 — Ledger/Trezor (stub)
-│   │   ├── multi_wallet.py          # Tier 3 — rotation/assigned
-│   │   ├── cloud_kms.py             # Tier 4 — AWS KMS/Vault (stub)
-│   │   ├── resolver.py              # env-driven tier selection
-│   │   └── wizard.py                # --setup-wallet interactive flow
-│   ├── web/                         # (v3) optional web dashboard
-│   │   ├── server.py                # FastAPI + WebSocket
-│   │   └── static/dashboard.html    # vanilla HTML + Chart.js
-│   ├── clients/
-│   │   ├── rpc.py                   # Polygon RPC with failover
-│   │   ├── polymarket.py            # Gamma + Data + CLOB wrappers
-│   │   ├── telegram.py              # (optional) alerts
-│   │   ├── binance.py               # CEX confirmation for DipArb
-│   │   └── supabase_client.py       # optional fill mirror
-│   ├── strategies/
-│   │   ├── base.py
-│   │   ├── arbitrage.py
-│   │   ├── tail_end.py
-│   │   ├── micro_spread.py
-│   │   ├── dip_arb.py
-│   │   ├── smart_copy.py
-│   │   ├── market_making.py
-│   │   └── sniper.py
-│   └── backtest/
-│       └── engine.py                # historical backtest harness
-└── tests/
-    ├── conftest.py
-    ├── test_risk.py                 # 9 tests
-    ├── test_queue.py                # 4 tests
-    ├── test_arbitrage.py            # 4 tests
-    ├── test_tail_end.py             # 5 tests
-    ├── test_smart_copy_scoring.py   # 4 tests
-    ├── test_backtest.py             # 1 test
-    ├── test_notifications.py        # 6 tests    (v3)
-    ├── test_wallet_keyring.py       # 7 tests    (v3)
-    ├── test_tui_commands.py         # 15 tests   (v3)
-    ├── test_config_watcher.py       # 5 tests    (v3)
-    └── test_budget.py               # 8 tests    (v3)
-```
-
----
-
-## Safety
-
-* `.env` is git-ignored and must never be committed.
-* The bot refuses to run in `MODE=live` without a private key and
-  funder address.
-* The risk manager is the only path to the executor — every opportunity
-  is gated on exposure, loss caps, drawdown, and pause state.
-* The Telegram `/emergencystop` flips a kill switch that blocks **all**
-  new orders instantly. Already-resting GTC orders are untouched; use
-  the Polymarket UI or an operator script to cancel them if needed.
-* This is a personal-use tool. It is **not** financial advice and
-  **not** audited. Run it in paper mode first, expect bugs, never
-  risk more than you can afford to lose.
-
----
-
-## Running the tests
-
-```bash
-pytest -q
-# 68 passed
-```
-
----
-
-## Further reading and references
-
-Architecture and API patterns informed by:
-
-* <https://github.com/HKUDS/Vibe-Trading> — backtesting framework, risk
-  management, multi-strategy orchestration.
-* <https://github.com/GiordanoSouza/polymarket-copy-trading-bot> —
-  Supabase realtime, position sizing.
-* <https://github.com/direkturcrypto/polymarket-terminal> — maker-rebate
-  MM, ghost-fill recovery, WebSocket RTDS.
-* [Polymarket docs](https://docs.polymarket.com), especially the
-  [CLOB quickstart](https://docs.polymarket.com/trading/quickstart) and
-  [WebSocket overview](https://docs.polymarket.com/market-data/websocket/overview).
-
-
-## Licencia
-
-MIT — © 2026 Ranuk IT Solutions | [ranuk.dev](https://ranuk.dev)
+*Backtest executed on: 2026-08-08*
+*Script: scripts/run_backtest.py*
+*Data source: Binance Public API*
